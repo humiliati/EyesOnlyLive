@@ -18,7 +18,7 @@ import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/component
 import { GeographicMap } from '@/components/GeographicMap'
 import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/components/GPSBreadcrumbTrail'
 import { ScenarioCreator } from '@/components/ScenarioCreator'
-import { HybridTacticalMap } from '@/components/HybridTacticalMap'
+import { HybridTacticalMap, type MapAnnotation } from '@/components/HybridTacticalMap'
 import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
 import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { BroadcastScheduler } from '@/components/BroadcastScheduler'
@@ -87,6 +87,7 @@ function App() {
   const [missionWaypoints, setMissionWaypoints] = useKV<Waypoint[]>('mission-waypoints', [])
   const [distanceMeasurements, setDistanceMeasurements] = useKV<DistanceMeasurement[]>('distance-measurements', [])
   const [deployedRoutes, setDeployedRoutes] = useKV<PatrolRoute[]>('deployed-routes', [])
+  const [mapAnnotations, setMapAnnotations] = useKV<MapAnnotation[]>('map-annotations', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
@@ -363,6 +364,28 @@ function App() {
   const handleRouteWaypointsCreated = useCallback((waypoints: Waypoint[]) => {
     setMissionWaypoints((current) => [...(current || []), ...waypoints])
   }, [setMissionWaypoints])
+
+  const handleCreateAnnotation = useCallback((annotation: Omit<MapAnnotation, 'id' | 'createdAt'>) => {
+    const newAnnotation: MapAnnotation = {
+      ...annotation,
+      id: `ann-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: Date.now()
+    }
+    setMapAnnotations((current) => [...(current || []), newAnnotation])
+    addLogEntry('mission', 'Area Marked', `${annotation.label} marked on tactical map`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'mission',
+      message: `Map annotation: ${annotation.label}`,
+      priority: 'normal'
+    })
+  }, [setMapAnnotations, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
+
+  const handleDeleteAnnotation = useCallback((annotationId: string) => {
+    setMapAnnotations((current) => (current || []).filter(a => a.id !== annotationId))
+    addLogEntry('info', 'Annotation Deleted', 'Map marking removed')
+  }, [setMapAnnotations, addLogEntry])
 
   const handleBroadcastAcknowledge = useCallback(async (
     broadcastId: string, 
@@ -1109,11 +1132,14 @@ function App() {
         <HybridTacticalMap 
           assets={assetLocations || []}
           lanes={activeLanes || []}
+          annotations={mapAnnotations || []}
           onAssetClick={(asset) => {
             addLogEntry('info', 'Asset Selected', `Viewing details for ${asset.callsign}`)
           }}
           onDispatchAsset={handleDispatchAsset}
           onCreateLane={handleCreateLane}
+          onCreateAnnotation={handleCreateAnnotation}
+          onDeleteAnnotation={handleDeleteAnnotation}
         />
 
         <GeographicMap 

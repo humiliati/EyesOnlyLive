@@ -24,7 +24,15 @@ import {
   GridFour,
   NavigationArrow,
   Users,
-  WarningDiamond
+  WarningDiamond,
+  Circle,
+  Square,
+  Polygon,
+  PencilSimple,
+  Eraser,
+  Trash,
+  Check,
+  X
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
@@ -54,12 +62,28 @@ export interface ActiveLane {
   createdAt: number
 }
 
+export type DrawingTool = 'none' | 'circle' | 'rectangle' | 'polygon' | 'freehand' | 'marker'
+
+export interface MapAnnotation {
+  id: string
+  type: 'circle' | 'rectangle' | 'polygon' | 'freehand' | 'marker'
+  label: string
+  color: string
+  createdBy: string
+  createdAt: number
+  points: Array<{ lat: number; lng: number }>
+  radius?: number
+}
+
 interface HybridTacticalMapProps {
   assets: AssetLocation[]
   lanes?: ActiveLane[]
+  annotations?: MapAnnotation[]
   onAssetClick?: (asset: AssetLocation) => void
   onDispatchAsset?: (assetId: string, targetGrid: { x: number; y: number }, message: string) => void
   onCreateLane?: (lane: Omit<ActiveLane, 'id' | 'createdAt'>) => void
+  onCreateAnnotation?: (annotation: Omit<MapAnnotation, 'id' | 'createdAt'>) => void
+  onDeleteAnnotation?: (annotationId: string) => void
 }
 
 interface MapBounds {
@@ -78,9 +102,12 @@ const GRID_LABELS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 export function HybridTacticalMap({ 
   assets, 
   lanes = [], 
+  annotations = [],
   onAssetClick, 
   onDispatchAsset,
-  onCreateLane 
+  onCreateLane,
+  onCreateAnnotation,
+  onDeleteAnnotation
 }: HybridTacticalMapProps) {
   const [selectedAsset, setSelectedAsset] = useState<AssetLocation | null>(null)
   const [selectedGrid, setSelectedGrid] = useState<{ x: number; y: number } | null>(null)
@@ -101,6 +128,13 @@ export function HybridTacticalMap({
   const [laneEndGrid, setLaneEndGrid] = useState<{ x: number; y: number } | null>(null)
   const [laneAssets, setLaneAssets] = useState<string[]>([])
   const [lanePriority, setLanePriority] = useState<'low' | 'normal' | 'high' | 'critical'>('normal')
+  const [drawingTool, setDrawingTool] = useState<DrawingTool>('none')
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [currentDrawing, setCurrentDrawing] = useState<Array<{ lat: number; lng: number }>>([])
+  const [drawingLabel, setDrawingLabel] = useState('')
+  const [drawingColor, setDrawingColor] = useState('oklch(0.75 0.18 145)')
+  const [showAnnotationDialog, setShowAnnotationDialog] = useState(false)
+  const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
   const mapRef = useRef<SVGSVGElement>(null)
 
   const bounds = useMemo((): MapBounds => {
@@ -206,10 +240,30 @@ export function HybridTacticalMap({
 
   const handleMapMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (e.button === 0) {
-      setIsPanning(true)
-      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y })
+      if (drawingTool !== 'none') {
+        const rect = mapRef.current?.getBoundingClientRect()
+        if (!rect) return
+
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const { lat, lng } = pixelToLatLng(x, y)
+
+        if (drawingTool === 'marker') {
+          setCurrentDrawing([{ lat, lng }])
+          setShowAnnotationDialog(true)
+        } else if (drawingTool === 'freehand') {
+          setIsDrawing(true)
+          setCurrentDrawing([{ lat, lng }])
+        } else {
+          setIsDrawing(true)
+          setCurrentDrawing([{ lat, lng }])
+        }
+      } else {
+        setIsPanning(true)
+        setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y })
+      }
     }
-  }, [panOffset])
+  }, [drawingTool, panOffset, pixelToLatLng])
 
   const handleMapMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (isPanning) {
@@ -217,12 +271,92 @@ export function HybridTacticalMap({
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y
       })
+    } else if (isDrawing && drawingTool !== 'none') {
+      const rect = mapRef.current?.getBoundingClientRect()
+      if (!rect) return
+
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const { lat, lng } = pixelToLatLng(x, y)
+
+      if (drawingTool === 'freehand') {
+        setCurrentDrawing(prev => [...prev, { lat, lng }])
+      } else if (drawingTool === 'circle' || drawingTool === 'rectangle') {
+        setCurrentDrawing(prev => [prev[0], { lat, lng }])
+      } else if (drawingTool === 'polygon') {
+      }
     }
-  }, [isPanning, panStart])
+  }, [isPanning, panStart, isDrawing, drawingTool, pixelToLatLng])
 
   const handleMapMouseUp = useCallback(() => {
-    setIsPanning(false)
+    if (isPanning) {
+      setIsPanning(false)
+    } else if (isDrawing && drawingTool !== 'none' && drawingTool !== 'polygon') {
+      if (currentDrawing.length > 0) {
+        setShowAnnotationDialog(true)
+      }
+      setIsDrawing(false)
+    }
+  }, [isPanning, isDrawing, drawingTool, currentDrawing])
+
+  const handleMapClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (drawingTool === 'polygon') {
+      const rect = mapRef.current?.getBoundingClientRect()
+      if (!rect) return
+
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const { lat, lng } = pixelToLatLng(x, y)
+
+      setCurrentDrawing(prev => [...prev, { lat, lng }])
+    }
+  }, [drawingTool, pixelToLatLng])
+
+  const handleCompletePolygon = useCallback(() => {
+    if (currentDrawing.length >= 3) {
+      setShowAnnotationDialog(true)
+    }
+  }, [currentDrawing])
+
+  const handleCancelDrawing = useCallback(() => {
+    setCurrentDrawing([])
+    setIsDrawing(false)
+    setDrawingTool('none')
   }, [])
+
+  const handleSaveAnnotation = useCallback(() => {
+    if (!drawingLabel || currentDrawing.length === 0) {
+      toast.error('Missing annotation details')
+      return
+    }
+
+    let radius: number | undefined = undefined
+    if (drawingTool === 'circle' && currentDrawing.length === 2) {
+      const [center, edge] = currentDrawing
+      const latDiff = edge.lat - center.lat
+      const lngDiff = edge.lng - center.lng
+      radius = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff)
+    }
+
+    const newAnnotation: Omit<MapAnnotation, 'id' | 'createdAt'> = {
+      type: drawingTool === 'marker' ? 'marker' : drawingTool as any,
+      label: drawingLabel,
+      color: drawingColor,
+      createdBy: 'M-CONSOLE',
+      points: currentDrawing,
+      radius
+    }
+
+    onCreateAnnotation?.(newAnnotation)
+
+    toast.success(`Area marked: ${drawingLabel}`)
+
+    setShowAnnotationDialog(false)
+    setCurrentDrawing([])
+    setDrawingLabel('')
+    setDrawingTool('none')
+    setIsDrawing(false)
+  }, [drawingLabel, drawingColor, currentDrawing, drawingTool, onCreateAnnotation])
 
   const handleZoomIn = useCallback(() => {
     setZoomLevel(prev => Math.min(prev * 1.3, 5))
@@ -489,6 +623,7 @@ export function HybridTacticalMap({
               onMouseMove={handleMapMouseMove}
               onMouseUp={handleMapMouseUp}
               onMouseLeave={handleMapMouseUp}
+              onClick={handleMapClick}
             >
               <defs>
                 <pattern id="grid-dots" width="10" height="10" patternUnits="userSpaceOnUse">
@@ -598,6 +733,275 @@ export function HybridTacticalMap({
                   />
                 </g>
               ))}
+
+              {annotations.map(annotation => {
+                if (annotation.type === 'circle' && annotation.points.length >= 1) {
+                  const center = latLngToPixel(annotation.points[0].lat, annotation.points[0].lng)
+                  const radius = annotation.radius || 0.01
+                  const radiusInPixels = radius * (MAP_WIDTH - 2 * PADDING) * zoomLevel
+
+                  return (
+                    <g key={annotation.id}>
+                      <circle
+                        cx={center.x}
+                        cy={center.y}
+                        r={radiusInPixels}
+                        fill={annotation.color}
+                        fillOpacity="0.15"
+                        stroke={annotation.color}
+                        strokeWidth="2"
+                        strokeDasharray="4 4"
+                        className={selectedAnnotation === annotation.id ? 'cursor-pointer' : 'cursor-pointer'}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedAnnotation(annotation.id)
+                        }}
+                      />
+                      <text
+                        x={center.x}
+                        y={center.y - radiusInPixels - 8}
+                        fill={annotation.color}
+                        fontSize="10"
+                        fontWeight="bold"
+                        fontFamily="JetBrains Mono, monospace"
+                        textAnchor="middle"
+                      >
+                        {annotation.label}
+                      </text>
+                    </g>
+                  )
+                } else if (annotation.type === 'rectangle' && annotation.points.length === 2) {
+                  const p1 = latLngToPixel(annotation.points[0].lat, annotation.points[0].lng)
+                  const p2 = latLngToPixel(annotation.points[1].lat, annotation.points[1].lng)
+                  const x = Math.min(p1.x, p2.x)
+                  const y = Math.min(p1.y, p2.y)
+                  const width = Math.abs(p2.x - p1.x)
+                  const height = Math.abs(p2.y - p1.y)
+
+                  return (
+                    <g key={annotation.id}>
+                      <rect
+                        x={x}
+                        y={y}
+                        width={width}
+                        height={height}
+                        fill={annotation.color}
+                        fillOpacity="0.15"
+                        stroke={annotation.color}
+                        strokeWidth="2"
+                        strokeDasharray="4 4"
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedAnnotation(annotation.id)
+                        }}
+                      />
+                      <text
+                        x={x + width / 2}
+                        y={y - 8}
+                        fill={annotation.color}
+                        fontSize="10"
+                        fontWeight="bold"
+                        fontFamily="JetBrains Mono, monospace"
+                        textAnchor="middle"
+                      >
+                        {annotation.label}
+                      </text>
+                    </g>
+                  )
+                } else if (annotation.type === 'polygon' && annotation.points.length >= 3) {
+                  const polygonPoints = annotation.points.map(p => {
+                    const pixel = latLngToPixel(p.lat, p.lng)
+                    return `${pixel.x},${pixel.y}`
+                  }).join(' ')
+
+                  const centerX = annotation.points.reduce((sum, p) => sum + latLngToPixel(p.lat, p.lng).x, 0) / annotation.points.length
+                  const centerY = annotation.points.reduce((sum, p) => sum + latLngToPixel(p.lat, p.lng).y, 0) / annotation.points.length
+
+                  return (
+                    <g key={annotation.id}>
+                      <polygon
+                        points={polygonPoints}
+                        fill={annotation.color}
+                        fillOpacity="0.15"
+                        stroke={annotation.color}
+                        strokeWidth="2"
+                        strokeDasharray="4 4"
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedAnnotation(annotation.id)
+                        }}
+                      />
+                      <text
+                        x={centerX}
+                        y={centerY}
+                        fill={annotation.color}
+                        fontSize="10"
+                        fontWeight="bold"
+                        fontFamily="JetBrains Mono, monospace"
+                        textAnchor="middle"
+                      >
+                        {annotation.label}
+                      </text>
+                    </g>
+                  )
+                } else if (annotation.type === 'freehand' && annotation.points.length >= 2) {
+                  const pathData = annotation.points.map((p, i) => {
+                    const pixel = latLngToPixel(p.lat, p.lng)
+                    return `${i === 0 ? 'M' : 'L'} ${pixel.x} ${pixel.y}`
+                  }).join(' ')
+
+                  const firstPoint = latLngToPixel(annotation.points[0].lat, annotation.points[0].lng)
+
+                  return (
+                    <g key={annotation.id}>
+                      <path
+                        d={pathData}
+                        fill="none"
+                        stroke={annotation.color}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        opacity="0.7"
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedAnnotation(annotation.id)
+                        }}
+                      />
+                      <text
+                        x={firstPoint.x}
+                        y={firstPoint.y - 8}
+                        fill={annotation.color}
+                        fontSize="10"
+                        fontWeight="bold"
+                        fontFamily="JetBrains Mono, monospace"
+                        textAnchor="middle"
+                      >
+                        {annotation.label}
+                      </text>
+                    </g>
+                  )
+                } else if (annotation.type === 'marker' && annotation.points.length === 1) {
+                  const pos = latLngToPixel(annotation.points[0].lat, annotation.points[0].lng)
+
+                  return (
+                    <g key={annotation.id}>
+                      <circle
+                        cx={pos.x}
+                        cy={pos.y}
+                        r="12"
+                        fill={annotation.color}
+                        fillOpacity="0.3"
+                        stroke={annotation.color}
+                        strokeWidth="2"
+                        className="cursor-pointer animate-pulse"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedAnnotation(annotation.id)
+                        }}
+                      />
+                      <path
+                        d={`M ${pos.x} ${pos.y - 16} L ${pos.x - 6} ${pos.y - 4} L ${pos.x} ${pos.y - 7} L ${pos.x + 6} ${pos.y - 4} Z`}
+                        fill={annotation.color}
+                        stroke={annotation.color}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={pos.x}
+                        y={pos.y + 24}
+                        fill={annotation.color}
+                        fontSize="10"
+                        fontWeight="bold"
+                        fontFamily="JetBrains Mono, monospace"
+                        textAnchor="middle"
+                      >
+                        {annotation.label}
+                      </text>
+                    </g>
+                  )
+                }
+                return null
+              })}
+
+              {currentDrawing.length > 0 && drawingTool === 'circle' && currentDrawing.length === 2 && (
+                <g>
+                  <circle
+                    cx={latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).x}
+                    cy={latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).y}
+                    r={Math.sqrt(
+                      Math.pow(latLngToPixel(currentDrawing[1].lat, currentDrawing[1].lng).x - latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).x, 2) +
+                      Math.pow(latLngToPixel(currentDrawing[1].lat, currentDrawing[1].lng).y - latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).y, 2)
+                    )}
+                    fill={drawingColor}
+                    fillOpacity="0.15"
+                    stroke={drawingColor}
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+                </g>
+              )}
+
+              {currentDrawing.length > 0 && drawingTool === 'rectangle' && currentDrawing.length === 2 && (
+                <g>
+                  <rect
+                    x={Math.min(latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).x, latLngToPixel(currentDrawing[1].lat, currentDrawing[1].lng).x)}
+                    y={Math.min(latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).y, latLngToPixel(currentDrawing[1].lat, currentDrawing[1].lng).y)}
+                    width={Math.abs(latLngToPixel(currentDrawing[1].lat, currentDrawing[1].lng).x - latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).x)}
+                    height={Math.abs(latLngToPixel(currentDrawing[1].lat, currentDrawing[1].lng).y - latLngToPixel(currentDrawing[0].lat, currentDrawing[0].lng).y)}
+                    fill={drawingColor}
+                    fillOpacity="0.15"
+                    stroke={drawingColor}
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+                </g>
+              )}
+
+              {currentDrawing.length > 0 && drawingTool === 'polygon' && (
+                <g>
+                  <polyline
+                    points={currentDrawing.map(p => {
+                      const pixel = latLngToPixel(p.lat, p.lng)
+                      return `${pixel.x},${pixel.y}`
+                    }).join(' ')}
+                    fill="none"
+                    stroke={drawingColor}
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+                  {currentDrawing.map((p, i) => {
+                    const pixel = latLngToPixel(p.lat, p.lng)
+                    return (
+                      <circle
+                        key={i}
+                        cx={pixel.x}
+                        cy={pixel.y}
+                        r="4"
+                        fill={drawingColor}
+                      />
+                    )
+                  })}
+                </g>
+              )}
+
+              {currentDrawing.length > 0 && drawingTool === 'freehand' && (
+                <g>
+                  <path
+                    d={currentDrawing.map((p, i) => {
+                      const pixel = latLngToPixel(p.lat, p.lng)
+                      return `${i === 0 ? 'M' : 'L'} ${pixel.x} ${pixel.y}`
+                    }).join(' ')}
+                    fill="none"
+                    stroke={drawingColor}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity="0.7"
+                  />
+                </g>
+              )}
 
               {assets.map(asset => {
                 const pos = latLngToPixel(asset.latitude, asset.longitude)
@@ -727,6 +1131,129 @@ export function HybridTacticalMap({
                 </Button>
               )}
             </div>
+          </div>
+
+          <div className="bg-card border border-primary/30 p-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Drawing Tools</span>
+              {drawingTool !== 'none' && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleCancelDrawing}
+                  className="h-5 px-2 text-[8px]"
+                >
+                  <X weight="bold" size={10} className="mr-1" />
+                  CANCEL
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              <Button
+                size="sm"
+                variant={drawingTool === 'marker' ? 'default' : 'outline'}
+                onClick={() => setDrawingTool('marker')}
+                className="h-7 px-2 text-[9px]"
+              >
+                <MapPin weight="bold" size={12} className="mr-1" />
+                PIN
+              </Button>
+              <Button
+                size="sm"
+                variant={drawingTool === 'circle' ? 'default' : 'outline'}
+                onClick={() => setDrawingTool('circle')}
+                className="h-7 px-2 text-[9px]"
+              >
+                <Circle weight="bold" size={12} className="mr-1" />
+                CIRCLE
+              </Button>
+              <Button
+                size="sm"
+                variant={drawingTool === 'rectangle' ? 'default' : 'outline'}
+                onClick={() => setDrawingTool('rectangle')}
+                className="h-7 px-2 text-[9px]"
+              >
+                <Square weight="bold" size={12} className="mr-1" />
+                RECT
+              </Button>
+              <Button
+                size="sm"
+                variant={drawingTool === 'polygon' ? 'default' : 'outline'}
+                onClick={() => setDrawingTool('polygon')}
+                className="h-7 px-2 text-[9px]"
+              >
+                <Polygon weight="bold" size={12} className="mr-1" />
+                POLY
+              </Button>
+              <Button
+                size="sm"
+                variant={drawingTool === 'freehand' ? 'default' : 'outline'}
+                onClick={() => setDrawingTool('freehand')}
+                className="h-7 px-2 text-[9px]"
+              >
+                <PencilSimple weight="bold" size={12} className="mr-1" />
+                DRAW
+              </Button>
+              {drawingTool === 'polygon' && currentDrawing.length >= 3 && (
+                <Button
+                  size="sm"
+                  onClick={handleCompletePolygon}
+                  className="h-7 px-2 text-[9px] bg-primary text-primary-foreground"
+                >
+                  <Check weight="bold" size={12} className="mr-1" />
+                  COMPLETE
+                </Button>
+              )}
+              {annotations.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (selectedAnnotation && onDeleteAnnotation) {
+                      onDeleteAnnotation(selectedAnnotation)
+                      setSelectedAnnotation(null)
+                      toast.success('Annotation deleted')
+                    }
+                  }}
+                  disabled={!selectedAnnotation}
+                  className="h-7 px-2 text-[9px]"
+                >
+                  <Trash weight="bold" size={12} className="mr-1" />
+                  DELETE
+                </Button>
+              )}
+            </div>
+            {drawingTool !== 'none' && (
+              <div className="mt-2 text-[9px] text-muted-foreground">
+                {drawingTool === 'marker' && '● Click to place marker'}
+                {drawingTool === 'circle' && '● Click and drag to draw circle'}
+                {drawingTool === 'rectangle' && '● Click and drag to draw rectangle'}
+                {drawingTool === 'polygon' && `● Click to add points (${currentDrawing.length} points) • Complete when ready`}
+                {drawingTool === 'freehand' && '● Click and drag to draw freehand'}
+              </div>
+            )}
+            {annotations.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border">
+                <div className="text-[9px] text-muted-foreground mb-1">
+                  {annotations.length} annotation{annotations.length !== 1 ? 's' : ''} on map
+                  {selectedAnnotation && ' • Click annotation or use DELETE button'}
+                </div>
+                <ScrollArea className="max-h-16">
+                  <div className="space-y-1">
+                    {annotations.map(ann => (
+                      <div 
+                        key={ann.id}
+                        className={`text-[9px] p-1 rounded cursor-pointer ${selectedAnnotation === ann.id ? 'bg-primary/20 border border-primary' : 'bg-secondary/30 hover:bg-secondary/50'}`}
+                        onClick={() => setSelectedAnnotation(ann.id)}
+                      >
+                        <span className="font-bold">{ann.label}</span>
+                        <span className="text-muted-foreground ml-2">({ann.type})</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
           </div>
 
           {selectedGrid && (
@@ -960,6 +1487,85 @@ export function HybridTacticalMap({
               <Button
                 variant="outline"
                 onClick={() => setShowLaneDialog(false)}
+                className="flex-1"
+              >
+                CANCEL
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAnnotationDialog} onOpenChange={setShowAnnotationDialog}>
+        <DialogContent className="bg-card border-primary/30">
+          <DialogHeader>
+            <DialogTitle className="text-sm tracking-[0.08em] uppercase flex items-center gap-2">
+              <WarningDiamond weight="bold" className="text-primary" size={16} />
+              Mark Area of Interest
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs tracking-[0.08em] uppercase">Label</Label>
+              <Input
+                value={drawingLabel}
+                onChange={(e) => setDrawingLabel(e.target.value)}
+                placeholder="e.g., HOSTILE ZONE, EXTRACTION POINT..."
+                className="text-xs"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs tracking-[0.08em] uppercase">Color</Label>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { color: 'oklch(0.75 0.18 145)', label: 'Primary' },
+                  { color: 'oklch(0.75 0.16 75)', label: 'Accent' },
+                  { color: 'oklch(0.65 0.25 25)', label: 'Alert' },
+                  { color: 'oklch(0.75 0.25 30)', label: 'Warning' },
+                  { color: 'oklch(0.65 0.20 260)', label: 'Intel' }
+                ].map((item) => (
+                  <button
+                    key={item.color}
+                    onClick={() => setDrawingColor(item.color)}
+                    className={`h-8 rounded border-2 ${drawingColor === item.color ? 'border-foreground' : 'border-border'}`}
+                    style={{ backgroundColor: item.color }}
+                    title={item.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-secondary/30 p-3 rounded border border-border text-[10px] space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Type:</span>
+                <span className="font-bold text-primary uppercase">{drawingTool}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Points:</span>
+                <span className="font-bold text-primary">{currentDrawing.length}</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSaveAnnotation}
+                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                disabled={!drawingLabel || currentDrawing.length === 0}
+              >
+                <CheckCircle weight="bold" size={14} className="mr-1" />
+                SAVE ANNOTATION
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAnnotationDialog(false)
+                  setCurrentDrawing([])
+                  setDrawingLabel('')
+                  setDrawingTool('none')
+                  setIsDrawing(false)
+                }}
                 className="flex-1"
               >
                 CANCEL
