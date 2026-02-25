@@ -56,6 +56,7 @@ import { BusinessMapOverlay } from '@/components/BusinessMapOverlay'
 import { AddBusinessPartnerDialog, type BusinessPartner } from '@/components/AddBusinessPartnerDialog'
 import { EventSequencerPanel } from '@/components/EventSequencerPanel'
 import { SequenceTemplateSelector } from '@/components/SequenceTemplateSelector'
+import { VisualTimelineEditor } from '@/components/VisualTimelineEditor'
 import { eventSequencer } from '@/lib/eventSequencer'
 import { 
   Heart, 
@@ -68,7 +69,9 @@ import {
   WifiHigh,
   Eye,
   Desktop,
-  Pause
+  Pause,
+  ArrowsDownUp,
+  Plus
 } from '@phosphor-icons/react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
@@ -136,6 +139,8 @@ function App() {
   const [selectedGridForBusiness, setSelectedGridForBusiness] = useState<{ x: number; y: number } | undefined>()
   const [deadDropAutoFill, setDeadDropAutoFill] = useState<{ gridX: number; gridY: number; businessName?: string; businessId?: string } | undefined>()
   const [realWorldItems, setRealWorldItems] = useKV<import('@/components/RealWorldItemCrafter').RealWorldItem[]>('real-world-items', [])
+  const [timelineEditorOpen, setTimelineEditorOpen] = useState(false)
+  const [editingSequenceId, setEditingSequenceId] = useState<string | undefined>()
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -1512,6 +1517,48 @@ function App() {
                 setGameState(newState)
               }}
             />
+
+            {timelineEditorOpen ? (
+              <VisualTimelineEditor
+                sequenceId={editingSequenceId}
+                onSave={(sequence) => {
+                  addLogEntry('mission', 'Sequence Saved', `Timeline "${sequence.name}" updated with branching logic`)
+                  addOpsFeedEntry({
+                    agentCallsign: 'M-CONSOLE',
+                    agentId: 'M-CONSOLE',
+                    type: 'mission',
+                    message: `Event sequence saved: ${sequence.name}`,
+                    priority: 'normal'
+                  })
+                  setTimelineEditorOpen(false)
+                  setEditingSequenceId(undefined)
+                }}
+                onCancel={() => {
+                  setTimelineEditorOpen(false)
+                  setEditingSequenceId(undefined)
+                }}
+                maxHeight="600px"
+              />
+            ) : (
+              <Card className="border-primary/30 p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ArrowsDownUp weight="bold" className="text-primary" size={20} />
+                    <span className="text-sm font-bold tracking-wide uppercase">Timeline Editor</span>
+                  </div>
+                  <Button size="sm" onClick={() => {
+                    setEditingSequenceId(undefined)
+                    setTimelineEditorOpen(true)
+                  }}>
+                    <Plus weight="bold" size={14} className="mr-1" />
+                    New Timeline
+                  </Button>
+                </div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  Create sequences with conditional branching based on acknowledgments and game state
+                </div>
+              </Card>
+            )}
 
             <EventSequencerPanel
               maxHeight="500px"

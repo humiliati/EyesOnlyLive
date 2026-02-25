@@ -1,5 +1,18 @@
 import type { MConsoleBroadcast } from './mConsoleSync'
 
+export interface ConditionalBranch {
+  id: string
+  condition: {
+    type: 'ack-received' | 'ack-not-received' | 'game-frozen' | 'game-unfrozen' | 'time-elapsed' | 'always'
+    targetAgents?: string[]
+    timeoutMs?: number
+    agentCount?: number
+    requireAllAgents?: boolean
+  }
+  steps: EventStep[]
+  label: string
+}
+
 export interface EventStep {
   id: string
   type: 'broadcast' | 'annotation' | 'dispatch' | 'lane-update' | 'scenario-deploy' | 'patrol-route' | 'ping' | 'ops-update'
@@ -8,6 +21,8 @@ export interface EventStep {
   targetAgents?: string[]
   requiresAck?: boolean
   autoExpireMs?: number
+  branches?: ConditionalBranch[]
+  isBranchStep?: boolean
   condition?: {
     type: 'time-elapsed' | 'ack-received' | 'location-reached' | 'manual-trigger'
     value?: any
@@ -225,6 +240,10 @@ class EventSequencer {
     try {
       await this.broadcastStep(step, sequence)
 
+      if (step.isBranchStep && step.branches && step.branches.length > 0) {
+        await this.evaluateAndExecuteBranches(step, sequence, execution)
+      }
+
       execution.completedSteps.push(step.id)
       sequence.currentStepIndex++
 
@@ -259,6 +278,93 @@ class EventSequencer {
       
       await this.saveSequence(sequence)
       await this.saveExecution(execution)
+    }
+  }
+
+  private async evaluateAndExecuteBranches(step: EventStep, sequence: EventSequence, execution: SequenceExecution): Promise<void> {
+    if (!step.branches) return
+
+    for (const branch of step.branches) {
+      const shouldExecute = await this.evaluateBranchCondition(branch, step, sequence)
+      
+      if (shouldExecute) {
+        for (const branchStep of branch.steps) {
+          await this.broadcastStep(branchStep, sequence)
+          
+          if (branchStep.delayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, branchStep.delayMs))
+          }
+        }
+      }
+    }
+  }
+
+  private async evaluateBranchCondition(branch: ConditionalBranch, parentStep: EventStep, sequence: EventSequence): Promise<boolean> {
+    const { condition } = branch
+
+    switch (condition.type) {
+      case 'always':
+        return true
+
+      case 'ack-received': {
+        if (!parentStep.requiresAck) return false
+        
+        const broadcasts = await window.spark.kv.get<any[]>('m-console-sync:broadcasts') || []
+        const parentBroadcast = broadcasts.find(b => 
+          b.payload?.message === parentStep.payload?.message &&
+          b.timestamp >= (sequence.actualStart || 0)
+        )
+        
+        if (!parentBroadcast) return false
+
+        const ackKey = `m-console-sync:acknowledgments:${parentBroadcast.id}`
+        const acknowledgments = await window.spark.kv.get<any[]>(ackKey) || []
+        
+        if (condition.requireAllAgents && parentStep.targetAgents) {
+          return acknowledgments.length >= parentStep.targetAgents.length
+        }
+        
+        return acknowledgments.length > 0
+      }
+
+      case 'ack-not-received': {
+        if (!parentStep.requiresAck || !condition.timeoutMs) return false
+        
+        const broadcasts = await window.spark.kv.get<any[]>('m-console-sync:broadcasts') || []
+        const parentBroadcast = broadcasts.find(b => 
+          b.payload?.message === parentStep.payload?.message &&
+          b.timestamp >= (sequence.actualStart || 0)
+        )
+        
+        if (!parentBroadcast) return true
+        
+        const elapsedMs = Date.now() - parentBroadcast.timestamp
+        if (elapsedMs < condition.timeoutMs) return false
+
+        const ackKey = `m-console-sync:acknowledgments:${parentBroadcast.id}`
+        const acknowledgments = await window.spark.kv.get<any[]>(ackKey) || []
+        
+        return acknowledgments.length === 0
+      }
+
+      case 'game-frozen': {
+        const gameState = await window.spark.kv.get<any>('game-state-sync:state')
+        return gameState?.frozen === true
+      }
+
+      case 'game-unfrozen': {
+        const gameState = await window.spark.kv.get<any>('game-state-sync:state')
+        return gameState?.frozen === false
+      }
+
+      case 'time-elapsed': {
+        if (!condition.timeoutMs) return false
+        const elapsedMs = Date.now() - (sequence.actualStart || Date.now())
+        return elapsedMs >= condition.timeoutMs
+      }
+
+      default:
+        return false
     }
   }
 
