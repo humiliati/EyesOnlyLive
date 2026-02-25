@@ -16,7 +16,9 @@ import { PanicButton } from '@/components/PanicButton'
 import { HistoricalLogViewer, type EnhancedLogEntry } from '@/components/HistoricalLogViewer'
 import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/components/GlobalAssetMap'
 import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/components/GPSBreadcrumbTrail'
+import { ScenarioCreator } from '@/components/ScenarioCreator'
 import { soundGenerator } from '@/lib/sounds'
+import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { 
   Heart, 
   MapPin, 
@@ -26,7 +28,8 @@ import {
   Lock,
   BatteryFull,
   WifiHigh,
-  Eye
+  Eye,
+  Desktop
 } from '@phosphor-icons/react'
 
 interface BiometricData {
@@ -94,6 +97,8 @@ function App() {
   const [batteryLevel, setBatteryLevel] = useState(87)
   const [currentTime, setCurrentTime] = useState(new Date())
   const previousPingIdRef = useRef<string | null>(null)
+  const [mConsoleMode, setMConsoleMode] = useState(false)
+  const syncUnsubscribeRef = useRef<(() => void) | null>(null)
 
   const addLogEntry = useCallback((type: LogEntry['type'], title: string, details?: string) => {
     const newEntry: LogEntry = {
@@ -273,6 +278,136 @@ function App() {
       addLogEntry('info', 'GPS Trail Exported', `Trail data exported for ${asset.callsign}`)
     }
   }, [assetLocations, addLogEntry])
+
+  const handleBroadcastReceived = useCallback((broadcast: MConsoleBroadcast) => {
+    if (!mConsoleSync.isRelevantBroadcast(broadcast, agentId || 'shadow-7-alpha')) {
+      return
+    }
+
+    switch (broadcast.type) {
+      case 'scenario-deploy': {
+        const scenario = broadcast.payload
+        addLogEntry('mission', 'Scenario Deployed', `${scenario.name} - ${scenario.description}`)
+        
+        if (scenario.threatLevel) {
+          setMissionData((current) => ({
+            ...current!,
+            name: scenario.name,
+            objective: scenario.description,
+            threatLevel: scenario.threatLevel,
+            progress: 0,
+            phase: 'DEPLOYMENT',
+            startTime: Date.now()
+          }))
+        }
+
+        if (scenario.lanes && scenario.lanes.length > 0) {
+          const lanesWithIds: ActiveLane[] = scenario.lanes.map((lane: Omit<ActiveLane, 'id' | 'createdAt'>) => ({
+            ...lane,
+            id: `lane-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            createdAt: Date.now()
+          }))
+          setActiveLanes(lanesWithIds)
+          addLogEntry('info', 'Lanes Updated', `${lanesWithIds.length} lane(s) configured by M console`)
+        }
+
+        if (scenario.assetPositions && scenario.assetPositions.length > 0) {
+          setAssetLocations((current) => {
+            return (current || []).map(asset => {
+              const position = scenario.assetPositions.find((p: any) => p.agentId === asset.agentId)
+              if (position) {
+                return { ...asset, gridX: position.gridX, gridY: position.gridY, lastUpdate: Date.now() }
+              }
+              return asset
+            })
+          })
+          addLogEntry('info', 'Asset Positions Updated', `${scenario.assetPositions.length} asset(s) repositioned`)
+        }
+
+        addOpsFeedEntry({
+          agentCallsign: broadcast.broadcastBy,
+          agentId: 'M-CONSOLE',
+          type: 'mission',
+          message: `Scenario deployed: ${scenario.name}`,
+          priority: 'high'
+        })
+        
+        soundGenerator.playActivityAlert('mission', 'high')
+        break
+      }
+
+      case 'lane-update': {
+        const update = broadcast.payload
+        if (update.action === 'create' && update.lane) {
+          const newLane: ActiveLane = {
+            ...update.lane as ActiveLane,
+            id: update.laneId || `lane-${Date.now()}`,
+            createdAt: Date.now()
+          }
+          setActiveLanes((current) => [...(current || []), newLane])
+          addLogEntry('info', 'Lane Created', `New lane "${newLane.name}" established by M console`)
+        } else if (update.action === 'delete' && update.laneId) {
+          setActiveLanes((current) => (current || []).filter(l => l.id !== update.laneId))
+          addLogEntry('info', 'Lane Removed', `Lane removed by M console`)
+        }
+        break
+      }
+
+      case 'dispatch-command': {
+        const command = broadcast.payload
+        setAssetLocations((current) => {
+          return (current || []).map(asset => 
+            asset.agentId === command.assetId 
+              ? { ...asset, gridX: command.targetGrid.x, gridY: command.targetGrid.y, status: 'enroute' as const, lastUpdate: Date.now() }
+              : asset
+          )
+        })
+        
+        addLogEntry('mission', 'Dispatch Order', `${command.directive}`)
+        addOpsFeedEntry({
+          agentCallsign: broadcast.broadcastBy,
+          agentId: 'M-CONSOLE',
+          type: 'mission',
+          message: command.directive,
+          priority: command.priority
+        })
+        break
+      }
+
+      case 'm-ping': {
+        const pingData = broadcast.payload
+        setCurrentPing({
+          id: `ping-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+          message: pingData.message,
+          priority: pingData.priority,
+          acknowledged: false
+        })
+        addLogEntry('info', 'Message from M', pingData.message)
+        break
+      }
+
+      case 'ops-update': {
+        const entry = broadcast.payload
+        addOpsFeedEntry(entry)
+        break
+      }
+    }
+  }, [agentId, addLogEntry, setMissionData, setActiveLanes, setAssetLocations, setCurrentPing, addOpsFeedEntry])
+
+  useEffect(() => {
+    mConsoleSync.startSync(3000)
+    
+    const unsubscribe = mConsoleSync.onBroadcast(handleBroadcastReceived)
+    syncUnsubscribeRef.current = unsubscribe
+
+    return () => {
+      mConsoleSync.stopSync()
+      if (syncUnsubscribeRef.current) {
+        syncUnsubscribeRef.current()
+      }
+    }
+  }, [handleBroadcastReceived])
 
   useEffect(() => {
     if (assetLocations && assetLocations.length === 0) {
@@ -703,13 +838,33 @@ function App() {
               <div className="text-[10px] text-muted-foreground">CLASSIFIED</div>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-sm font-bold tabular-nums">{formatTime(currentTime)}</div>
-            <Badge variant="outline" className="text-[9px] px-1 py-0 border-primary text-primary">
-              {clearanceLevel}
-            </Badge>
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              variant={mConsoleMode ? "default" : "outline"}
+              onClick={() => setMConsoleMode(!mConsoleMode)}
+              className="text-[8px] h-6 px-2"
+            >
+              <Desktop weight="bold" size={12} className="mr-1" />
+              {mConsoleMode ? 'M CONSOLE' : 'WATCH'}
+            </Button>
+            <div className="text-right">
+              <div className="text-sm font-bold tabular-nums">{formatTime(currentTime)}</div>
+              <Badge variant="outline" className="text-[9px] px-1 py-0 border-primary text-primary">
+                {clearanceLevel}
+              </Badge>
+            </div>
           </div>
         </header>
+
+        {mConsoleMode && (
+          <ScenarioCreator
+            assets={assetLocations || []}
+            onScenarioDeployed={(scenario) => {
+              addLogEntry('mission', 'Scenario Deployed', `${scenario.name} deployed by M console`)
+            }}
+          />
+        )}
 
         <SituationPanel 
           missionProgress={missionData.progress}
