@@ -14,6 +14,7 @@ import { StatusUpdate } from '@/components/StatusUpdate'
 import { SituationPanel } from '@/components/SituationPanel'
 import { PanicButton } from '@/components/PanicButton'
 import { HistoricalLogViewer, type EnhancedLogEntry } from '@/components/HistoricalLogViewer'
+import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/components/GlobalAssetMap'
 import { soundGenerator } from '@/lib/sounds'
 import { 
   Heart, 
@@ -68,6 +69,8 @@ function App() {
   const [currentPing, setCurrentPing] = useKV<PingMessage | null>('current-m-ping', null)
   const [opsFeedEntries, setOpsFeedEntries] = useKV<OpsFeedEntry[]>('ops-feed', [])
   const [readOpsFeedEntries, setReadOpsFeedEntries] = useKV<string[]>('read-ops-feed-entries', [])
+  const [assetLocations, setAssetLocations] = useKV<AssetLocation[]>('asset-locations', [])
+  const [activeLanes, setActiveLanes] = useKV<ActiveLane[]>('active-lanes', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
@@ -217,6 +220,83 @@ function App() {
       )
     })
   }, [setLogEntries])
+
+  const handleDispatchAsset = useCallback((assetId: string, targetGrid: { x: number; y: number }, message: string) => {
+    setAssetLocations((current) => {
+      return (current || []).map(asset => 
+        asset.id === assetId 
+          ? { ...asset, gridX: targetGrid.x, gridY: targetGrid.y, status: 'enroute' as const, lastUpdate: Date.now() }
+          : asset
+      )
+    })
+    
+    const asset = assetLocations?.find(a => a.id === assetId)
+    if (asset) {
+      addLogEntry('mission', 'Asset Dispatched', `${asset.callsign} dispatched to grid - ${message}`)
+      addOpsFeedEntry({
+        agentCallsign: asset.callsign,
+        agentId: asset.agentId,
+        type: 'location',
+        message: `Dispatching to target grid: ${message}`,
+        priority: 'high'
+      })
+    }
+  }, [setAssetLocations, assetLocations, addLogEntry, addOpsFeedEntry])
+
+  const handleCreateLane = useCallback((lane: Omit<ActiveLane, 'id' | 'createdAt'>) => {
+    const newLane: ActiveLane = {
+      ...lane,
+      id: `lane-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: Date.now()
+    }
+    setActiveLanes((current) => [...(current || []), newLane])
+    addLogEntry('mission', 'Lane Created', `Active lane "${lane.name}" established with ${lane.assignedAssets.length} asset(s)`)
+  }, [setActiveLanes, addLogEntry])
+
+  useEffect(() => {
+    if (assetLocations && assetLocations.length === 0) {
+      const blueTeamAgents = [
+        { callsign: 'PHANTOM-3', id: 'phantom-3-bravo', gridX: 2, gridY: 1 },
+        { callsign: 'VIPER-5', id: 'viper-5-charlie', gridX: 5, gridY: 3 },
+        { callsign: 'RAVEN-2', id: 'raven-2-delta', gridX: 1, gridY: 5 },
+        { callsign: 'FALCON-8', id: 'falcon-8-echo', gridX: 6, gridY: 6 },
+      ]
+
+      const initialAssets: AssetLocation[] = blueTeamAgents.map(agent => ({
+        id: agent.id,
+        callsign: agent.callsign,
+        agentId: agent.id,
+        gridX: agent.gridX,
+        gridY: agent.gridY,
+        latitude: 40.7128 + (Math.random() - 0.5) * 0.1,
+        longitude: -74.0060 + (Math.random() - 0.5) * 0.1,
+        status: 'active' as const,
+        lastUpdate: Date.now()
+      }))
+
+      setAssetLocations(initialAssets)
+      addLogEntry('info', 'Asset Tracking Initialized', `${initialAssets.length} assets detected on tactical grid`)
+    }
+  }, [assetLocations, setAssetLocations, addLogEntry])
+
+  useEffect(() => {
+    const assetUpdateInterval = setInterval(() => {
+      setAssetLocations((current) => {
+        if (!current || current.length === 0) return current || []
+        
+        const randomAsset = current[Math.floor(Math.random() * current.length)]
+        const updatedAssets = current.map(asset => {
+          if (asset.id === randomAsset.id && asset.status === 'enroute') {
+            return { ...asset, status: 'active' as const, lastUpdate: Date.now() }
+          }
+          return asset
+        })
+        return updatedAssets
+      })
+    }, 25000)
+
+    return () => clearInterval(assetUpdateInterval)
+  }, [setAssetLocations])
 
   useEffect(() => {
     if (currentPing && !currentPing.acknowledged) {
@@ -540,6 +620,12 @@ function App() {
         <QuickResponse onSendResponse={handleQuickResponse} agentCallsign={agentCallsign || 'SHADOW-7'} />
 
         <StatusUpdate onStatusUpdate={handleStatusUpdate} agentCallsign={agentCallsign || 'SHADOW-7'} />
+
+        <GlobalAssetMap 
+          assets={assetLocations || []}
+          onDispatchAsset={handleDispatchAsset}
+          onCreateLane={handleCreateLane}
+        />
 
         <Card className="border-primary/30 p-4 space-y-3">
           <div className="flex items-center justify-between">
