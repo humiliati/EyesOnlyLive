@@ -66,7 +66,7 @@ export type DrawingTool = 'none' | 'circle' | 'rectangle' | 'polygon' | 'freehan
 
 export interface MapAnnotation {
   id: string
-  type: 'circle' | 'rectangle' | 'polygon' | 'freehand' | 'marker'
+  type: 'circle' | 'rectangle' | 'polygon' | 'freehand' | 'marker' | 'danger' | 'objective' | 'waypoint' | 'intel' | 'asset'
   label: string
   color: string
   createdBy: string
@@ -76,6 +76,9 @@ export interface MapAnnotation {
   requiresAck?: boolean
   priority?: 'low' | 'normal' | 'high' | 'critical'
   notes?: string
+  description?: string
+  targetAgents?: string[]
+  autoExpireMs?: number
   acknowledgments?: AnnotationAcknowledgment[]
 }
 

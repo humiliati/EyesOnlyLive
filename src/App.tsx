@@ -24,6 +24,7 @@ import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { BroadcastScheduler } from '@/components/BroadcastScheduler'
 import { AnnotationBroadcaster } from '@/components/AnnotationBroadcaster'
 import { AnnotationAcknowledgmentTracker } from '@/components/AnnotationAcknowledgmentTracker'
+import { AnnotationAckDashboard } from '@/components/AnnotationAckDashboard'
 import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
 import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
 import { soundGenerator } from '@/lib/sounds'
@@ -1169,6 +1170,15 @@ function App() {
 
         {mConsoleMode && (
           <>
+            <AnnotationAckDashboard
+              annotations={mapAnnotations || []}
+              assets={assetLocations || []}
+              maxHeight="600px"
+              onRefresh={() => {
+                addLogEntry('info', 'Dashboard Refreshed', 'Annotation acknowledgment statistics updated')
+              }}
+            />
+            
             <ScenarioCreator
               assets={assetLocations || []}
               onScenarioDeployed={(scenario) => {
