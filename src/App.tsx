@@ -15,6 +15,7 @@ import { SituationPanel } from '@/components/SituationPanel'
 import { PanicButton } from '@/components/PanicButton'
 import { HistoricalLogViewer, type EnhancedLogEntry } from '@/components/HistoricalLogViewer'
 import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/components/GlobalAssetMap'
+import { GeographicMap } from '@/components/GeographicMap'
 import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/components/GPSBreadcrumbTrail'
 import { ScenarioCreator } from '@/components/ScenarioCreator'
 import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
@@ -1023,6 +1024,14 @@ function App() {
         <QuickResponse onSendResponse={handleQuickResponse} agentCallsign={agentCallsign || 'SHADOW-7'} />
 
         <StatusUpdate onStatusUpdate={handleStatusUpdate} agentCallsign={agentCallsign || 'SHADOW-7'} />
+
+        <GeographicMap 
+          assets={assetLocations || []}
+          lanes={activeLanes || []}
+          onAssetClick={(asset) => {
+            addLogEntry('info', 'Asset Selected', `Viewing details for ${asset.callsign}`)
+          }}
+        />
 
         <GlobalAssetMap 
           assets={assetLocations || []}
