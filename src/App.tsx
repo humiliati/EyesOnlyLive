@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
 import { MissionLog, type LogEntry } from '@/components/MissionLog'
+import { MPing, type PingMessage } from '@/components/MPing'
+import { OperationsFeed, type OpsFeedEntry } from '@/components/OperationsFeed'
 import { 
   Heart, 
   MapPin, 
@@ -45,6 +47,7 @@ interface MissionData {
 function App() {
   const [isTransmitting, setIsTransmitting] = useKV<boolean>('transmission-active', false)
   const [agentCallsign] = useKV<string>('agent-callsign', 'SHADOW-7')
+  const [agentId] = useKV<string>('agent-id', 'shadow-7-alpha')
   const [clearanceLevel] = useKV<string>('clearance-level', 'LEVEL 4')
   const [missionData, setMissionData] = useKV<MissionData>('mission-data', {
     name: 'OPERATION NIGHTFALL',
@@ -55,6 +58,8 @@ function App() {
     startTime: Date.now()
   })
   const [logEntries, setLogEntries] = useKV<LogEntry[]>('mission-log', [])
+  const [currentPing, setCurrentPing] = useKV<PingMessage | null>('current-m-ping', null)
+  const [opsFeedEntries, setOpsFeedEntries] = useKV<OpsFeedEntry[]>('ops-feed', [])
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -86,12 +91,117 @@ function App() {
     setLogEntries((current) => [...(current || []), newEntry])
   }, [setLogEntries])
 
+  const addOpsFeedEntry = useCallback((entry: Omit<OpsFeedEntry, 'id' | 'timestamp'>) => {
+    const newEntry: OpsFeedEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      ...entry
+    }
+    setOpsFeedEntries((current) => [...(current || []), newEntry])
+  }, [setOpsFeedEntries])
+
+  const handleAcknowledgePing = useCallback((pingId: string) => {
+    setCurrentPing((current) => {
+      if (current && current.id === pingId) {
+        return { ...current, acknowledged: true }
+      }
+      return current || null
+    })
+    addLogEntry('info', 'M Ping Acknowledged', 'Command confirmation transmitted')
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'check-in',
+      message: 'Acknowledged M directive'
+    })
+  }, [setCurrentPing, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
+
   useEffect(() => {
     if (logEntries && logEntries.length === 0) {
       addLogEntry('mission', 'Mission Initialized', `${agentCallsign} deployed to field`)
       addLogEntry('info', 'Telemetry Systems Online', 'All sensors operational')
     }
   }, [logEntries, addLogEntry, agentCallsign])
+
+  useEffect(() => {
+    if (opsFeedEntries && opsFeedEntries.length === 0) {
+      const blueTeamAgents = [
+        { callsign: 'PHANTOM-3', id: 'phantom-3-bravo' },
+        { callsign: 'VIPER-5', id: 'viper-5-charlie' },
+        { callsign: 'RAVEN-2', id: 'raven-2-delta' },
+      ]
+      
+      blueTeamAgents.forEach((agent, index) => {
+        setTimeout(() => {
+          addOpsFeedEntry({
+            agentCallsign: agent.callsign,
+            agentId: agent.id,
+            type: 'check-in',
+            message: 'Operational status confirmed'
+          })
+        }, index * 500)
+      })
+    }
+  }, [opsFeedEntries, addOpsFeedEntry])
+
+  useEffect(() => {
+    const pingMessages = [
+      { message: 'Status check: Confirm operational status', priority: 'normal' as const },
+      { message: 'Intelligence update: New target coordinates received', priority: 'high' as const },
+      { message: 'URGENT: Possible hostiles in your sector', priority: 'critical' as const },
+      { message: 'Mission parameter update: Proceed to checkpoint beta', priority: 'high' as const },
+      { message: 'Routine check-in required', priority: 'low' as const },
+    ]
+
+    const pingInterval = setInterval(() => {
+      if (!currentPing || currentPing.acknowledged) {
+        const randomMessage = pingMessages[Math.floor(Math.random() * pingMessages.length)]
+        setCurrentPing({
+          id: `ping-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+          message: randomMessage.message,
+          priority: randomMessage.priority,
+          acknowledged: false
+        })
+        addLogEntry('info', 'Incoming Message from M', randomMessage.message)
+      }
+    }, 45000 + Math.random() * 30000)
+
+    return () => clearInterval(pingInterval)
+  }, [currentPing, setCurrentPing, addLogEntry])
+
+  useEffect(() => {
+    const blueTeamAgents = [
+      { callsign: 'PHANTOM-3', id: 'phantom-3-bravo' },
+      { callsign: 'VIPER-5', id: 'viper-5-charlie' },
+      { callsign: 'RAVEN-2', id: 'raven-2-delta' },
+      { callsign: 'FALCON-8', id: 'falcon-8-echo' },
+    ]
+
+    const activities = [
+      { type: 'status' as const, messages: ['Position secure', 'Area clear', 'No contact', 'Holding position'] },
+      { type: 'location' as const, messages: ['Moving to waypoint', 'Approaching target zone', 'Relocating to sector', 'En route to extraction'] },
+      { type: 'mission' as const, messages: ['Objective acquired', 'Target identified', 'Package secured', 'Mission progress 50%'] },
+      { type: 'alert' as const, messages: ['Contact detected', 'Possible threat nearby', 'Unidentified movement'], priority: 'high' as const },
+      { type: 'transmission' as const, messages: ['Opening secure channel', 'Data link established', 'Transmitting intel'] },
+    ]
+
+    const opsInterval = setInterval(() => {
+      const agent = blueTeamAgents[Math.floor(Math.random() * blueTeamAgents.length)]
+      const activity = activities[Math.floor(Math.random() * activities.length)]
+      const message = activity.messages[Math.floor(Math.random() * activity.messages.length)]
+      
+      addOpsFeedEntry({
+        agentCallsign: agent.callsign,
+        agentId: agent.id,
+        type: activity.type,
+        message,
+        priority: activity.priority
+      })
+    }, 15000 + Math.random() * 20000)
+
+    return () => clearInterval(opsInterval)
+  }, [addOpsFeedEntry])
 
   useEffect(() => {
     const bioInterval = setInterval(() => {
@@ -196,15 +306,15 @@ function App() {
   }, [Math.floor(signalStrength / 10)])
 
   useEffect(() => {
-    const prevTransmitting = isTransmitting
-    return () => {
-      if (isTransmitting && !prevTransmitting) {
-        addLogEntry('transmission', 'Transmission Activated', 'Secure data stream established')
-      } else if (!isTransmitting && prevTransmitting) {
-        addLogEntry('transmission', 'Transmission Ended', 'Data stream terminated')
-      }
+    if (isTransmitting) {
+      addOpsFeedEntry({
+        agentCallsign: agentCallsign || 'SHADOW-7',
+        agentId: agentId || 'shadow-7-alpha',
+        type: 'transmission',
+        message: 'Secure data stream active'
+      })
     }
-  }, [isTransmitting])
+  }, [isTransmitting, addOpsFeedEntry, agentCallsign, agentId])
 
   useEffect(() => {
     if (!missionData) return
@@ -279,6 +389,8 @@ function App() {
             </Badge>
           </div>
         </header>
+
+        <MPing ping={currentPing || null} onAcknowledge={handleAcknowledgePing} />
 
         <Card className="border-primary/30 p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -439,6 +551,8 @@ function App() {
             </div>
           )}
         </Card>
+
+        <OperationsFeed entries={opsFeedEntries || []} currentAgentId={agentId || 'shadow-7-alpha'} maxHeight="300px" />
 
         <MissionLog entries={logEntries || []} maxHeight="350px" />
 
