@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator'
 import { MissionLog, type LogEntry } from '@/components/MissionLog'
 import { MPing, type PingMessage } from '@/components/MPing'
 import { OperationsFeed, type OpsFeedEntry } from '@/components/OperationsFeed'
+import { soundGenerator } from '@/lib/sounds'
 import { 
   Heart, 
   MapPin, 
@@ -79,6 +80,7 @@ function App() {
   const [signalStrength, setSignalStrength] = useState(85)
   const [batteryLevel, setBatteryLevel] = useState(87)
   const [currentTime, setCurrentTime] = useState(new Date())
+  const previousPingIdRef = useRef<string | null>(null)
 
   const addLogEntry = useCallback((type: LogEntry['type'], title: string, details?: string) => {
     const newEntry: LogEntry = {
@@ -115,6 +117,15 @@ function App() {
       message: 'Acknowledged M directive'
     })
   }, [setCurrentPing, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
+
+  useEffect(() => {
+    if (currentPing && !currentPing.acknowledged) {
+      if (previousPingIdRef.current !== currentPing.id) {
+        soundGenerator.playPingAlert(currentPing.priority)
+        previousPingIdRef.current = currentPing.id
+      }
+    }
+  }, [currentPing])
 
   useEffect(() => {
     if (logEntries && logEntries.length === 0) {
