@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building, Package, MapPin } from '@phosphor-icons/react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Building, Package, MapPin, ArrowsDownUp } from '@phosphor-icons/react'
 import { type BusinessPartner } from '@/components/BusinessPartnershipDirectory'
 import { type RealWorldItem } from '@/components/RealWorldItemCrafter'
 import { toast } from 'sonner'
@@ -23,8 +24,37 @@ export function BusinessMapOverlay({
   const [businesses] = useKV<BusinessPartner[]>('business-partners', [])
   const [items] = useKV<RealWorldItem[]>('real-world-items', [])
   const [dragOverGrid, setDragOverGrid] = useState<{ x: number; y: number } | null>(null)
+  const [isDraggingItem, setIsDraggingItem] = useState(false)
 
   const gridSize = 8
+
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('application/json')) {
+        setIsDraggingItem(true)
+      }
+    }
+
+    const handleDragLeave = (e: DragEvent) => {
+      if (!e.relatedTarget) {
+        setIsDraggingItem(false)
+      }
+    }
+
+    const handleDrop = () => {
+      setIsDraggingItem(false)
+    }
+
+    window.addEventListener('dragenter', handleDragEnter)
+    window.addEventListener('dragleave', handleDragLeave)
+    window.addEventListener('drop', handleDrop)
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter)
+      window.removeEventListener('dragleave', handleDragLeave)
+      window.removeEventListener('drop', handleDrop)
+    }
+  }, [])
 
   const gridData = useMemo(() => {
     const grid: Map<string, { businesses: BusinessPartner[]; itemCount: number }> = new Map()
@@ -89,27 +119,38 @@ export function BusinessMapOverlay({
     if (!data || data.businesses.length === 0) {
       return (
         <div 
-          className={`w-full h-full border border-border/30 flex items-center justify-center transition-all ${
+          className={`w-full h-full border flex items-center justify-center transition-all relative ${
             isDragOver 
-              ? 'bg-primary/30 border-primary border-2 scale-95' 
-              : 'bg-muted/20'
+              ? 'bg-primary/40 border-primary border-2 scale-95 shadow-lg' 
+              : isDraggingItem
+              ? 'bg-muted/30 border-primary/30 border-dashed'
+              : 'bg-muted/20 border-border/30'
           }`}
           onDrop={(e) => handleDrop(e, gridX, gridY)}
           onDragOver={(e) => handleDragOver(e, gridX, gridY)}
           onDragLeave={handleDragLeave}
         >
-          <span className="text-[8px] text-muted-foreground opacity-50">
+          <span className={`text-[8px] font-mono transition-all ${
+            isDragOver 
+              ? 'text-primary font-bold scale-125' 
+              : 'text-muted-foreground opacity-50'
+          }`}>
             {String.fromCharCode(65 + gridX)}{gridY + 1}
           </span>
+          {isDragOver && (
+            <div className="absolute inset-0 border-2 border-primary animate-pulse pointer-events-none" />
+          )}
         </div>
       )
     }
 
     return (
       <div 
-        className={`w-full h-full border-2 hover:bg-accent/30 cursor-pointer transition-all relative group ${
+        className={`w-full h-full border-2 hover:bg-accent/40 cursor-pointer transition-all relative group ${
           isDragOver 
-            ? 'bg-primary/40 border-primary scale-95' 
+            ? 'bg-primary/50 border-primary scale-95 shadow-lg z-10' 
+            : isDraggingItem
+            ? 'bg-accent/30 border-accent/70'
             : 'bg-accent/20 border-accent'
         }`}
         onClick={() => {
@@ -150,6 +191,10 @@ export function BusinessMapOverlay({
             ))}
           </div>
         </div>
+
+        {isDragOver && (
+          <div className="absolute inset-0 border-2 border-primary animate-pulse pointer-events-none rounded" />
+        )}
       </div>
     )
   }
@@ -160,6 +205,15 @@ export function BusinessMapOverlay({
         <MapPin weight="bold" className="text-primary" size={16} />
         <span className="text-xs tracking-[0.08em] uppercase">Business Map Overview</span>
       </div>
+
+      {isDraggingItem && (
+        <Alert className="mb-4 border-primary bg-primary/10 animate-pulse">
+          <ArrowsDownUp weight="bold" className="text-primary" size={16} />
+          <AlertDescription className="text-[10px]">
+            <span className="font-bold text-primary">DROP ITEM ON GRID:</span> Release to deploy item to location
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div 
         className="grid gap-1"

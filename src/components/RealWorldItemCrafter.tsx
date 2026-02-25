@@ -521,6 +521,24 @@ export function RealWorldItemCrafter({
         </Dialog>
       </div>
 
+      {(!items || items.length === 0) && (
+        <div className="text-center py-4 mb-4 border border-border/50 border-dashed rounded bg-muted/20">
+          <Package weight="bold" className="text-muted-foreground mx-auto mb-2" size={24} />
+          <div className="text-xs text-muted-foreground">
+            No items crafted yet
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            Create items to deploy them on the business map
+          </div>
+        </div>
+      )}
+
+      {items && items.length > 0 && (
+        <Badge variant="outline" className="mb-3 text-[9px] border-primary text-primary">
+          💡 DRAG ITEMS TO BUSINESS MAP TO DEPLOY
+        </Badge>
+      )}
+
       <Separator className="mb-4" />
 
       <ScrollArea style={{ maxHeight }}>
@@ -535,8 +553,8 @@ export function RealWorldItemCrafter({
             <Card 
               key={item.id} 
               className={`border-border p-3 space-y-3 transition-all ${
-                !item.deployed ? 'cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-lg' : ''
-              } ${draggedItem?.id === item.id ? 'opacity-50 scale-95' : ''}`}
+                !item.deployed ? 'cursor-grab active:cursor-grabbing hover:border-primary hover:shadow-lg hover:scale-[1.02]' : 'opacity-60'
+              } ${draggedItem?.id === item.id ? 'opacity-30 scale-95 border-primary/50' : ''}`}
               draggable={!item.deployed}
               onDragStart={(e) => {
                 if (!item.deployed) {
@@ -544,6 +562,14 @@ export function RealWorldItemCrafter({
                   e.dataTransfer.effectAllowed = 'copy'
                   e.dataTransfer.setData('application/json', JSON.stringify(item))
                   e.dataTransfer.setData('text/plain', `${item.emoji} ${item.name}`)
+                  
+                  const dragImage = document.createElement('div')
+                  dragImage.className = 'fixed -top-[1000px] left-0 bg-card border-2 border-primary p-3 rounded shadow-xl flex items-center gap-2'
+                  dragImage.innerHTML = `<span class="text-2xl">${item.emoji}</span><span class="text-sm font-bold">${item.name}</span>`
+                  document.body.appendChild(dragImage)
+                  e.dataTransfer.setDragImage(dragImage, 40, 40)
+                  setTimeout(() => document.body.removeChild(dragImage), 0)
+                  
                   if (onItemDragStart) {
                     onItemDragStart(item)
                   }
