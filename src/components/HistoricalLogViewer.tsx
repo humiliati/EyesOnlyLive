@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { Checkbox } from '@/components/ui/checkbox'
 import { 
   Dialog,
   DialogContent,
@@ -14,6 +15,16 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -21,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { LogEntry } from '@/components/MissionLog'
+import { toast } from 'sonner'
 import { 
   FunnelSimple,
   MagnifyingGlass,
@@ -35,35 +47,61 @@ import {
   Download,
   CalendarBlank,
   X,
-  Equals
+  Equals,
+  Trash,
+  Archive,
+  Tag,
+  CheckSquare,
+  Square
 } from '@phosphor-icons/react'
 
-interface HistoricalLogViewerProps {
-  entries: LogEntry[]
+export interface EnhancedLogEntry extends LogEntry {
+  archived?: boolean
+  tags?: string[]
 }
 
-type FilterType = 'all' | LogEntry['type']
+interface HistoricalLogViewerProps {
+  entries: EnhancedLogEntry[]
+  onDeleteEntries?: (entryIds: string[]) => void
+  onArchiveEntries?: (entryIds: string[], archived: boolean) => void
+  onTagEntries?: (entryIds: string[], tags: string[]) => void
+}
+
+type FilterType = 'all' | 'archived' | LogEntry['type']
 type TimeRange = 'all' | '1h' | '6h' | '24h' | '7d'
 
-export function HistoricalLogViewer({ entries }: HistoricalLogViewerProps) {
+export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries, onTagEntries }: HistoricalLogViewerProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<FilterType>('all')
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [isOpen, setIsOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [newTag, setNewTag] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
 
   const filteredEntries = useMemo(() => {
     let filtered = [...entries]
+
+    if (!showArchived) {
+      filtered = filtered.filter(entry => !entry.archived)
+    }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(entry => 
         entry.title.toLowerCase().includes(query) ||
-        entry.details?.toLowerCase().includes(query)
+        entry.details?.toLowerCase().includes(query) ||
+        entry.tags?.some(tag => tag.toLowerCase().includes(query))
       )
     }
 
     if (filterType !== 'all') {
-      filtered = filtered.filter(entry => entry.type === filterType)
+      if (filterType === 'archived') {
+        filtered = filtered.filter(entry => entry.archived)
+      } else {
+        filtered = filtered.filter(entry => entry.type === filterType)
+      }
     }
 
     if (timeRange !== 'all') {
@@ -80,7 +118,15 @@ export function HistoricalLogViewer({ entries }: HistoricalLogViewerProps) {
     }
 
     return filtered.reverse()
-  }, [entries, searchQuery, filterType, timeRange])
+  }, [entries, searchQuery, filterType, timeRange, showArchived])
+
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    entries.forEach(entry => {
+      entry.tags?.forEach(tag => tagSet.add(tag))
+    })
+    return Array.from(tagSet).sort()
+  }, [entries])
 
   const stats = useMemo(() => {
     const typeCount: Record<string, number> = {}
@@ -105,7 +151,9 @@ export function HistoricalLogViewer({ entries }: HistoricalLogViewerProps) {
       timestamp: new Date(entry.timestamp).toISOString(),
       type: entry.type,
       title: entry.title,
-      details: entry.details || ''
+      details: entry.details || '',
+      archived: entry.archived || false,
+      tags: entry.tags || []
     }))
     
     const jsonStr = JSON.stringify(exportData, null, 2)
@@ -116,12 +164,85 @@ export function HistoricalLogViewer({ entries }: HistoricalLogViewerProps) {
     a.download = `mission-log-${Date.now()}.json`
     a.click()
     URL.revokeObjectURL(url)
+    toast.success('Mission log exported successfully')
   }
 
   const clearFilters = () => {
     setSearchQuery('')
     setFilterType('all')
     setTimeRange('all')
+  }
+
+  const toggleSelection = (entryId: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId)
+      } else {
+        newSet.add(entryId)
+      }
+      return newSet
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredEntries.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredEntries.map(e => e.id)))
+    }
+  }
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDelete = () => {
+    if (onDeleteEntries && selectedIds.size > 0) {
+      onDeleteEntries(Array.from(selectedIds))
+      toast.success(`Deleted ${selectedIds.size} log entries`)
+      setSelectedIds(new Set())
+      setShowDeleteDialog(false)
+    }
+  }
+
+  const handleArchiveSelected = (archived: boolean) => {
+    if (onArchiveEntries && selectedIds.size > 0) {
+      onArchiveEntries(Array.from(selectedIds), archived)
+      toast.success(`${archived ? 'Archived' : 'Unarchived'} ${selectedIds.size} log entries`)
+      setSelectedIds(new Set())
+    }
+  }
+
+  const handleTagSelected = () => {
+    if (!newTag.trim() || selectedIds.size === 0) return
+    
+    if (onTagEntries) {
+      const selectedEntries = filteredEntries.filter(e => selectedIds.has(e.id))
+      const uniqueTags = new Set<string>()
+      
+      selectedEntries.forEach(entry => {
+        entry.tags?.forEach(tag => uniqueTags.add(tag))
+      })
+      uniqueTags.add(newTag.trim())
+      
+      onTagEntries(Array.from(selectedIds), Array.from(uniqueTags))
+      toast.success(`Tagged ${selectedIds.size} log entries with "${newTag.trim()}"`)
+      setNewTag('')
+      setSelectedIds(new Set())
+    }
+  }
+
+  const handleRemoveTag = (entryId: string, tagToRemove: string) => {
+    if (onTagEntries) {
+      const entry = entries.find(e => e.id === entryId)
+      if (entry?.tags) {
+        const newTags = entry.tags.filter(tag => tag !== tagToRemove)
+        onTagEntries([entryId], newTags)
+        toast.success(`Removed tag "${tagToRemove}"`)
+      }
+    }
   }
 
   const getIcon = (type: LogEntry['type']) => {
@@ -274,6 +395,7 @@ export function HistoricalLogViewer({ entries }: HistoricalLogViewerProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
                 <SelectItem value="critical">Critical</SelectItem>
                 <SelectItem value="warning">Warning</SelectItem>
                 <SelectItem value="success">Success</SelectItem>
@@ -318,17 +440,101 @@ export function HistoricalLogViewer({ entries }: HistoricalLogViewerProps) {
               )}
             </div>
             
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={filteredEntries.length === 0}
-              className="h-7 px-3 text-[10px] border-primary/30 hover:bg-primary/10"
-            >
-              <Download size={12} weight="bold" className="mr-1" />
-              EXPORT JSON
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowArchived(!showArchived)}
+                className={`h-7 px-3 text-[10px] ${showArchived ? 'text-primary' : 'text-muted-foreground'}`}
+              >
+                <Archive size={12} weight="bold" className="mr-1" />
+                {showArchived ? 'HIDE ARCHIVED' : 'SHOW ARCHIVED'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={filteredEntries.length === 0}
+                className="h-7 px-3 text-[10px] border-primary/30 hover:bg-primary/10"
+              >
+                <Download size={12} weight="bold" className="mr-1" />
+                EXPORT
+              </Button>
+            </div>
           </div>
+
+          {selectedIds.size > 0 && (
+            <Card className="border-primary/50 bg-primary/5 p-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-primary text-primary-foreground">
+                    {selectedIds.size} SELECTED
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="h-6 px-2 text-[10px]"
+                  >
+                    <X size={12} weight="bold" className="mr-1" />
+                    CLEAR
+                  </Button>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteSelected}
+                    className="h-7 px-3 text-[10px] border-destructive/50 text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash size={12} weight="bold" className="mr-1" />
+                    DELETE
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleArchiveSelected(true)}
+                    className="h-7 px-3 text-[10px] border-primary/30 hover:bg-primary/10"
+                  >
+                    <Archive size={12} weight="bold" className="mr-1" />
+                    ARCHIVE
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleArchiveSelected(false)}
+                    className="h-7 px-3 text-[10px] border-primary/30 hover:bg-primary/10"
+                  >
+                    <Archive size={12} weight="bold" className="mr-1" />
+                    UNARCHIVE
+                  </Button>
+                  
+                  <div className="flex items-center gap-1">
+                    <Input
+                      placeholder="Tag name..."
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleTagSelected()}
+                      className="h-7 w-24 text-[10px] border-primary/30"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleTagSelected}
+                      disabled={!newTag.trim()}
+                      className="h-7 px-3 text-[10px] border-primary/30 hover:bg-primary/10"
+                    >
+                      <Tag size={12} weight="bold" className="mr-1" />
+                      TAG
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
 
         <Separator className="bg-border/50" />
@@ -349,57 +555,133 @@ export function HistoricalLogViewer({ entries }: HistoricalLogViewerProps) {
                 </Button>
               </div>
             ) : (
-              filteredEntries.map((entry, index) => {
-                const prevEntry = filteredEntries[index - 1]
-                const showDateDivider = !prevEntry || 
-                  formatDate(entry.timestamp) !== formatDate(prevEntry.timestamp)
+              <>
+                {filteredEntries.length > 0 && (
+                  <div className="flex items-center gap-2 py-2 border-b border-border/50">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={toggleSelectAll}
+                      className="h-6 px-2 text-[10px]"
+                    >
+                      {selectedIds.size === filteredEntries.length ? (
+                        <CheckSquare size={14} weight="bold" className="mr-1 text-primary" />
+                      ) : (
+                        <Square size={14} weight="bold" className="mr-1" />
+                      )}
+                      SELECT ALL
+                    </Button>
+                  </div>
+                )}
+                
+                {filteredEntries.map((entry, index) => {
+                  const prevEntry = filteredEntries[index - 1]
+                  const showDateDivider = !prevEntry || 
+                    formatDate(entry.timestamp) !== formatDate(prevEntry.timestamp)
 
-                return (
-                  <div key={entry.id}>
-                    {showDateDivider && (
-                      <div className="flex items-center gap-3 mb-3 mt-4 first:mt-0">
-                        <CalendarBlank size={14} weight="bold" className="text-primary" />
-                        <span className="text-[10px] tracking-wider text-muted-foreground">
-                          {formatDate(entry.timestamp)}
-                        </span>
-                        <Separator className="flex-1 bg-border/30" />
-                      </div>
-                    )}
-                    
-                    <Card className={`border-l-4 ${getTypeColor(entry.type)} p-3 hover:bg-muted/20 transition-colors`}>
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5">{getIcon(entry.type)}</div>
-                        <div className="flex-1 space-y-1.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="text-xs font-medium leading-tight">{entry.title}</div>
-                            <Badge 
-                              variant="outline" 
-                              className={`text-[8px] px-1.5 py-0 uppercase shrink-0 ${getTypeBadgeColor(entry.type)}`}
-                            >
-                              {entry.type}
-                            </Badge>
-                          </div>
-                          
-                          {entry.details && (
-                            <div className="text-[11px] text-muted-foreground leading-snug">
-                              {entry.details}
+                  return (
+                    <div key={entry.id}>
+                      {showDateDivider && (
+                        <div className="flex items-center gap-3 mb-3 mt-4 first:mt-0">
+                          <CalendarBlank size={14} weight="bold" className="text-primary" />
+                          <span className="text-[10px] tracking-wider text-muted-foreground">
+                            {formatDate(entry.timestamp)}
+                          </span>
+                          <Separator className="flex-1 bg-border/30" />
+                        </div>
+                      )}
+                      
+                      <Card className={`border-l-4 ${getTypeColor(entry.type)} ${entry.archived ? 'opacity-60' : ''} p-3 hover:bg-muted/20 transition-colors`}>
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={selectedIds.has(entry.id)}
+                            onCheckedChange={() => toggleSelection(entry.id)}
+                            className="mt-1"
+                          />
+                          <div className="mt-0.5">{getIcon(entry.type)}</div>
+                          <div className="flex-1 space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <div className="text-xs font-medium leading-tight">{entry.title}</div>
+                                {entry.archived && (
+                                  <Badge 
+                                    variant="outline" 
+                                    className="text-[8px] px-1.5 py-0 uppercase bg-muted text-muted-foreground"
+                                  >
+                                    <Archive size={10} weight="bold" className="mr-1" />
+                                    ARCHIVED
+                                  </Badge>
+                                )}
+                              </div>
+                              <Badge 
+                                variant="outline" 
+                                className={`text-[8px] px-1.5 py-0 uppercase shrink-0 ${getTypeBadgeColor(entry.type)}`}
+                              >
+                                {entry.type}
+                              </Badge>
                             </div>
-                          )}
-                          
-                          <div className="flex items-center gap-3 text-[9px] text-muted-foreground/70">
-                            <span className="tabular-nums font-mono">{formatTime(entry.timestamp)}</span>
-                            <span>•</span>
-                            <span>{formatRelativeTime(entry.timestamp)}</span>
+                            
+                            {entry.details && (
+                              <div className="text-[11px] text-muted-foreground leading-snug">
+                                {entry.details}
+                              </div>
+                            )}
+                            
+                            {entry.tags && entry.tags.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {entry.tags.map(tag => (
+                                  <Badge
+                                    key={tag}
+                                    variant="outline"
+                                    className="text-[8px] px-1.5 py-0 bg-primary/10 text-primary border-primary/30 cursor-pointer hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50"
+                                    onClick={() => handleRemoveTag(entry.id, tag)}
+                                  >
+                                    <Tag size={10} weight="bold" className="mr-0.5" />
+                                    {tag}
+                                    <X size={10} weight="bold" className="ml-0.5" />
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center gap-3 text-[9px] text-muted-foreground/70">
+                              <span className="tabular-nums font-mono">{formatTime(entry.timestamp)}</span>
+                              <span>•</span>
+                              <span>{formatRelativeTime(entry.timestamp)}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </Card>
-                  </div>
-                )
-              })
+                      </Card>
+                    </div>
+                  )
+                })}
+              </>
             )}
           </div>
         </ScrollArea>
+
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent className="bg-card border-destructive/50">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                <Trash size={20} weight="bold" />
+                Delete Log Entries
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to permanently delete {selectedIds.size} log {selectedIds.size === 1 ? 'entry' : 'entries'}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   )

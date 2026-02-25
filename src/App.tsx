@@ -13,7 +13,7 @@ import { QuickResponse } from '@/components/QuickResponse'
 import { StatusUpdate } from '@/components/StatusUpdate'
 import { SituationPanel } from '@/components/SituationPanel'
 import { PanicButton } from '@/components/PanicButton'
-import { HistoricalLogViewer } from '@/components/HistoricalLogViewer'
+import { HistoricalLogViewer, type EnhancedLogEntry } from '@/components/HistoricalLogViewer'
 import { soundGenerator } from '@/lib/sounds'
 import { 
   Heart, 
@@ -64,7 +64,7 @@ function App() {
     phase: 'INFILTRATION',
     startTime: Date.now()
   })
-  const [logEntries, setLogEntries] = useKV<LogEntry[]>('mission-log', [])
+  const [logEntries, setLogEntries] = useKV<EnhancedLogEntry[]>('mission-log', [])
   const [currentPing, setCurrentPing] = useKV<PingMessage | null>('current-m-ping', null)
   const [opsFeedEntries, setOpsFeedEntries] = useKV<OpsFeedEntry[]>('ops-feed', [])
   const [readOpsFeedEntries, setReadOpsFeedEntries] = useKV<string[]>('read-ops-feed-entries', [])
@@ -187,6 +187,28 @@ function App() {
       }, 1500 + index * 800)
     })
   }, [addOpsFeedEntry, addLogEntry, agentCallsign, agentId])
+
+  const handleDeleteEntries = useCallback((entryIds: string[]) => {
+    setLogEntries((current) => {
+      return (current || []).filter(entry => !entryIds.includes(entry.id))
+    })
+  }, [setLogEntries])
+
+  const handleArchiveEntries = useCallback((entryIds: string[], archived: boolean) => {
+    setLogEntries((current) => {
+      return (current || []).map(entry => 
+        entryIds.includes(entry.id) ? { ...entry, archived } : entry
+      )
+    })
+  }, [setLogEntries])
+
+  const handleTagEntries = useCallback((entryIds: string[], tags: string[]) => {
+    setLogEntries((current) => {
+      return (current || []).map(entry => 
+        entryIds.includes(entry.id) ? { ...entry, tags } : entry
+      )
+    })
+  }, [setLogEntries])
 
   useEffect(() => {
     if (currentPing && !currentPing.acknowledged) {
@@ -681,7 +703,12 @@ function App() {
 
         <MissionLog entries={logEntries || []} maxHeight="350px" />
 
-        <HistoricalLogViewer entries={logEntries || []} />
+        <HistoricalLogViewer 
+          entries={logEntries || []} 
+          onDeleteEntries={handleDeleteEntries}
+          onArchiveEntries={handleArchiveEntries}
+          onTagEntries={handleTagEntries}
+        />
 
         {batteryLevel < 20 && (
           <Card className="border-destructive bg-destructive/10 p-3">
