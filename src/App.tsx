@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useKV } from '@github/spark/hooks'
+import { Toaster } from 'sonner'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -469,8 +470,10 @@ function App() {
   if (!missionData) return null
 
   return (
-    <div className="min-h-screen bg-background text-foreground scanline-effect">
-      <div className="max-w-md mx-auto p-4 space-y-4">
+    <>
+      <Toaster position="top-center" />
+      <div className="min-h-screen bg-background text-foreground scanline-effect">
+        <div className="max-w-md mx-auto p-4 space-y-4">
         <header className="flex items-center justify-between border border-border p-3 bg-card">
           <div className="flex items-center gap-2">
             <Eye weight="bold" className="text-primary" size={20} />
@@ -704,8 +707,9 @@ function App() {
         <div className="text-center text-[9px] text-muted-foreground tracking-wider pb-4 opacity-50">
           ░ CLASSIFIED - FOR AUTHORIZED PERSONNEL ONLY ░
         </div>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
