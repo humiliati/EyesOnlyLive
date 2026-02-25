@@ -18,6 +18,7 @@ import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/component
 import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/components/GPSBreadcrumbTrail'
 import { ScenarioCreator } from '@/components/ScenarioCreator'
 import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
+import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { 
@@ -978,12 +979,21 @@ function App() {
         </header>
 
         {mConsoleMode && (
-          <ScenarioCreator
-            assets={assetLocations || []}
-            onScenarioDeployed={(scenario) => {
-              addLogEntry('mission', 'Scenario Deployed', `${scenario.name} deployed by M console`)
-            }}
-          />
+          <>
+            <ScenarioCreator
+              assets={assetLocations || []}
+              onScenarioDeployed={(scenario) => {
+                addLogEntry('mission', 'Scenario Deployed', `${scenario.name} deployed by M console`)
+              }}
+            />
+            
+            <BroadcastTemplates
+              assets={assetLocations || []}
+              onBroadcastSent={(templateId, targetAgents) => {
+                addLogEntry('transmission', 'Broadcast Sent', `Template broadcast sent to ${targetAgents.length} agent(s)`)
+              }}
+            />
+          </>
         )}
 
         <SituationPanel 
