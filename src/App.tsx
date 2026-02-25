@@ -30,6 +30,9 @@ import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/compo
 import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
+import { gameStateSync, type GameState } from '@/lib/gameStateSync'
+import { GameControlPanel } from '@/components/GameControlPanel'
+import { RedTeamTelemetryPanel } from '@/components/RedTeamTelemetryPanel'
 import { 
   Heart, 
   MapPin, 
@@ -40,8 +43,10 @@ import {
   BatteryFull,
   WifiHigh,
   Eye,
-  Desktop
+  Desktop,
+  Pause
 } from '@phosphor-icons/react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface BiometricData {
   heartRate: number
@@ -115,6 +120,10 @@ function App() {
   const previousPingIdRef = useRef<string | null>(null)
   const [mConsoleMode, setMConsoleMode] = useState(false)
   const syncUnsubscribeRef = useRef<(() => void) | null>(null)
+  const [gameState, setGameState] = useState<GameState>({
+    frozen: false,
+    emergencyPanicActive: false
+  })
 
   const addLogEntry = useCallback((type: LogEntry['type'], title: string, details?: string) => {
     const newEntry: LogEntry = {
@@ -695,17 +704,27 @@ function App() {
 
   useEffect(() => {
     mConsoleSync.startSync(3000)
+    gameStateSync.startSync(1000)
     
     const unsubscribe = mConsoleSync.onBroadcast(handleBroadcastReceived)
     syncUnsubscribeRef.current = unsubscribe
 
+    const unsubscribeGameState = gameStateSync.onGameStateChange((state) => {
+      setGameState(state)
+      if (state.frozen) {
+        addLogEntry('critical', 'Game Frozen', state.freezeReason || 'Operations suspended by M Console')
+      }
+    })
+
     return () => {
       mConsoleSync.stopSync()
+      gameStateSync.stopSync()
       if (syncUnsubscribeRef.current) {
         syncUnsubscribeRef.current()
       }
+      unsubscribeGameState()
     }
-  }, [handleBroadcastReceived])
+  }, [handleBroadcastReceived, addLogEntry])
 
   useEffect(() => {
     const loadTrackedBroadcasts = async () => {
@@ -965,6 +984,8 @@ function App() {
 
   useEffect(() => {
     const bioInterval = setInterval(() => {
+      if (gameState.frozen) return
+      
       setBiometrics((prev) => ({
         heartRate: Math.max(60, Math.min(180, prev.heartRate + (Math.random() - 0.5) * 5)),
         bloodOxygen: Math.max(90, Math.min(100, prev.bloodOxygen + (Math.random() - 0.5) * 2)),
@@ -974,6 +995,8 @@ function App() {
     }, 2500)
 
     const locInterval = setInterval(() => {
+      if (gameState.frozen) return
+      
       setLocation((prev) => ({
         latitude: prev.latitude + (Math.random() - 0.5) * 0.0001,
         longitude: prev.longitude + (Math.random() - 0.5) * 0.0001,
@@ -996,6 +1019,8 @@ function App() {
     }, 1000)
 
     const missionInterval = setInterval(() => {
+      if (gameState.frozen) return
+      
       setMissionData((current) => {
         if (!current) {
           return {
@@ -1031,7 +1056,7 @@ function App() {
       clearInterval(timeInterval)
       clearInterval(missionInterval)
     }
-  }, [setMissionData])
+  }, [setMissionData, gameState.frozen])
 
   useEffect(() => {
     if (biometrics.heartRate > 140) {
@@ -1171,6 +1196,17 @@ function App() {
 
         {mConsoleMode && (
           <>
+            <GameControlPanel 
+              isFrozen={gameState.frozen}
+              emergencyPanicActive={gameState.emergencyPanicActive}
+              onStateChange={async () => {
+                const newState = await gameStateSync.getGameState()
+                setGameState(newState)
+              }}
+            />
+
+            <RedTeamTelemetryPanel maxHeight="500px" />
+
             <AnnotationAckDashboard
               annotations={mapAnnotations || []}
               assets={assetLocations || []}
@@ -1208,6 +1244,18 @@ function App() {
               currentUser="M-CONSOLE"
             />
           </>
+        )}
+
+        {gameState.frozen && (
+          <Alert className="border-accent bg-accent/20 animate-pulse-border">
+            <Pause weight="bold" className="text-accent" size={20} />
+            <AlertDescription className="text-sm">
+              <div className="font-bold text-accent">GAME FROZEN</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {gameState.freezeReason || 'All operations suspended by M Console'}
+              </div>
+            </AlertDescription>
+          </Alert>
         )}
 
         <SituationPanel 
