@@ -17,6 +17,7 @@ import { HistoricalLogViewer, type EnhancedLogEntry } from '@/components/Histori
 import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/components/GlobalAssetMap'
 import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/components/GPSBreadcrumbTrail'
 import { ScenarioCreator } from '@/components/ScenarioCreator'
+import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { 
@@ -76,6 +77,7 @@ function App() {
   const [assetLocations, setAssetLocations] = useKV<AssetLocation[]>('asset-locations', [])
   const [activeLanes, setActiveLanes] = useKV<ActiveLane[]>('active-lanes', [])
   const [gpsTrails, setGpsTrails] = useKV<AssetTrail[]>('gps-trails', [])
+  const [trackedBroadcasts, setTrackedBroadcasts] = useKV<TrackedBroadcast[]>('tracked-broadcasts', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
@@ -120,21 +122,55 @@ function App() {
     setOpsFeedEntries((current) => [...(current || []), newEntry])
   }, [setOpsFeedEntries])
 
-  const handleAcknowledgePing = useCallback((pingId: string) => {
+  const handleAcknowledgePing = useCallback(async (pingId: string, response?: 'acknowledged' | 'unable' | 'negative', message?: string) => {
     setCurrentPing((current) => {
       if (current && current.id === pingId) {
         return { ...current, acknowledged: true }
       }
       return current || null
     })
-    addLogEntry('info', 'M Ping Acknowledged', 'Command confirmation transmitted')
+    
+    const responseText = response === 'acknowledged' ? 'Acknowledged' 
+      : response === 'unable' ? 'Unable to comply' 
+      : response === 'negative' ? 'Negative'
+      : 'Acknowledged'
+    
+    addLogEntry('info', 'M Ping Acknowledged', `Command confirmation transmitted: ${responseText}`)
     addOpsFeedEntry({
       agentCallsign: agentCallsign || 'SHADOW-7',
       agentId: agentId || 'shadow-7-alpha',
       type: 'check-in',
-      message: 'Acknowledged M directive'
+      message: `M directive response: ${responseText}${message ? ` - ${message}` : ''}`
     })
-  }, [setCurrentPing, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
+
+    if (currentPing?.broadcastId) {
+      const ack: BroadcastAcknowledgment = {
+        broadcastId: currentPing.broadcastId,
+        agentId: agentId || 'shadow-7-alpha',
+        agentCallsign: agentCallsign || 'SHADOW-7',
+        acknowledgedAt: Date.now(),
+        response: response || 'acknowledged',
+        responseMessage: message,
+        receivedAt: Date.now()
+      }
+
+      await mConsoleSync.recordAcknowledgment(ack)
+
+      setTrackedBroadcasts((current) => {
+        return (current || []).map(broadcast => {
+          if (broadcast.id === currentPing.broadcastId) {
+            const existingAcks = broadcast.acknowledgments || []
+            const updatedAcks = existingAcks.filter(a => a.agentId !== ack.agentId)
+            return {
+              ...broadcast,
+              acknowledgments: [...updatedAcks, ack]
+            }
+          }
+          return broadcast
+        })
+      })
+    }
+  }, [setCurrentPing, addLogEntry, addOpsFeedEntry, agentCallsign, agentId, currentPing, setTrackedBroadcasts])
 
   const handleMarkOpsFeedAsRead = useCallback((entryId: string) => {
     setReadOpsFeedEntries((current) => {
@@ -279,9 +315,79 @@ function App() {
     }
   }, [assetLocations, addLogEntry])
 
+  const handleBroadcastAcknowledge = useCallback(async (
+    broadcastId: string, 
+    response: 'acknowledged' | 'unable' | 'negative',
+    message?: string
+  ) => {
+    const ack: BroadcastAcknowledgment = {
+      broadcastId,
+      agentId: agentId || 'shadow-7-alpha',
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      acknowledgedAt: Date.now(),
+      response,
+      responseMessage: message,
+      receivedAt: Date.now()
+    }
+
+    await mConsoleSync.recordAcknowledgment(ack)
+
+    setTrackedBroadcasts((current) => {
+      return (current || []).map(broadcast => {
+        if (broadcast.id === broadcastId) {
+          const existingAcks = broadcast.acknowledgments || []
+          const updatedAcks = existingAcks.filter(a => a.agentId !== ack.agentId)
+          return {
+            ...broadcast,
+            acknowledgments: [...updatedAcks, ack]
+          }
+        }
+        return broadcast
+      })
+    })
+
+    const responseText = response === 'acknowledged' ? 'Acknowledged' 
+      : response === 'unable' ? 'Unable to comply' 
+      : 'Negative'
+    
+    addLogEntry('info', 'Broadcast Acknowledged', `Response: ${responseText}`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'transmission',
+      message: `Broadcast response: ${responseText}${message ? ` - ${message}` : ''}`,
+      priority: 'normal'
+    })
+  }, [agentId, agentCallsign, setTrackedBroadcasts, addLogEntry, addOpsFeedEntry])
+
   const handleBroadcastReceived = useCallback((broadcast: MConsoleBroadcast) => {
     if (!mConsoleSync.isRelevantBroadcast(broadcast, agentId || 'shadow-7-alpha')) {
       return
+    }
+
+    if (broadcast.requiresAck) {
+      setTrackedBroadcasts((current) => {
+        const exists = (current || []).find(b => b.id === broadcast.id)
+        if (exists) return current || []
+
+        const newTracked: TrackedBroadcast = {
+          id: broadcast.id,
+          type: broadcast.type === 'ops-update' ? 'general' : broadcast.type,
+          message: broadcast.payload?.message || 'New directive from M',
+          priority: broadcast.payload?.priority || 'normal',
+          issuedBy: broadcast.broadcastBy,
+          issuedAt: broadcast.timestamp,
+          targetAgents: broadcast.targetAgents || [],
+          acknowledgments: [],
+          requiresAck: true,
+          autoExpireMs: broadcast.autoExpireMs
+        }
+
+        return [...(current || []), newTracked]
+      })
+
+      addLogEntry('info', 'Acknowledgment Required', broadcast.payload?.message || 'New directive requires response')
+      soundGenerator.playPingAlert('high')
     }
 
     switch (broadcast.type) {
@@ -408,6 +514,20 @@ function App() {
       }
     }
   }, [handleBroadcastReceived])
+
+  useEffect(() => {
+    const loadTrackedBroadcasts = async () => {
+      const broadcasts = await mConsoleSync.getTrackedBroadcasts()
+      if (broadcasts.length > 0) {
+        setTrackedBroadcasts(broadcasts)
+      }
+    }
+
+    loadTrackedBroadcasts()
+
+    const syncInterval = setInterval(loadTrackedBroadcasts, 10000)
+    return () => clearInterval(syncInterval)
+  }, [setTrackedBroadcasts])
 
   useEffect(() => {
     if (assetLocations && assetLocations.length === 0) {
@@ -1064,6 +1184,11 @@ function App() {
           maxHeight="300px"
           readEntries={new Set(readOpsFeedEntries || [])}
           onMarkAsRead={handleMarkOpsFeedAsRead}
+        />
+
+        <BroadcastAcknowledgmentTracker 
+          broadcasts={trackedBroadcasts || []}
+          maxHeight="400px"
         />
 
         <MissionLog entries={logEntries || []} maxHeight="350px" />

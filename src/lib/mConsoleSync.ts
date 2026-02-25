@@ -35,12 +35,25 @@ export interface DispatchCommand {
   timestamp: number
 }
 
+export interface BroadcastAcknowledgment {
+  broadcastId: string
+  agentId: string
+  agentCallsign: string
+  acknowledgedAt: number
+  response: 'acknowledged' | 'unable' | 'negative'
+  responseMessage?: string
+  receivedAt: number
+}
+
 export interface MConsoleBroadcast {
-  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'ops-update'
+  id: string
+  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'ops-update' | 'general'
   payload: any
   timestamp: number
   broadcastBy: string
   targetAgents?: string[]
+  requiresAck?: boolean
+  autoExpireMs?: number
 }
 
 export type SyncEventHandler = (broadcast: MConsoleBroadcast) => void
@@ -115,18 +128,27 @@ class MConsoleSync {
     type: MConsoleBroadcast['type'],
     payload: any,
     broadcastBy: string,
-    targetAgents?: string[]
-  ): Promise<void> {
+    targetAgents?: string[],
+    requiresAck: boolean = false,
+    autoExpireMs?: number
+  ): Promise<string> {
+    const broadcastId = `broadcast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    
     const broadcast: MConsoleBroadcast = {
+      id: broadcastId,
       type,
       payload,
       timestamp: Date.now(),
       broadcastBy,
-      targetAgents
+      targetAgents,
+      requiresAck,
+      autoExpireMs
     }
 
     const key = `${this.kvPrefix}:broadcast:${broadcast.timestamp}-${Math.random().toString(36).substr(2, 9)}`
     await window.spark.kv.set(key, broadcast)
+    
+    return broadcastId
   }
 
   async deployScenario(scenario: ScenarioDeployment, deployedBy: string): Promise<void> {
@@ -205,6 +227,104 @@ class MConsoleSync {
       return true
     }
     return broadcast.targetAgents.includes(agentId)
+  }
+
+  async recordAcknowledgment(ack: BroadcastAcknowledgment): Promise<void> {
+    const key = `${this.kvPrefix}:ack:${ack.broadcastId}:${ack.agentId}`
+    await window.spark.kv.set(key, ack)
+  }
+
+  async getAcknowledgments(broadcastId: string): Promise<BroadcastAcknowledgment[]> {
+    const allKeys = await window.spark.kv.keys()
+    const ackKeys = allKeys.filter((key: string) => 
+      key.startsWith(`${this.kvPrefix}:ack:${broadcastId}:`)
+    )
+    
+    const acks: BroadcastAcknowledgment[] = []
+    
+    for (const key of ackKeys) {
+      const ack = await window.spark.kv.get<BroadcastAcknowledgment>(key)
+      if (ack) {
+        acks.push(ack)
+      }
+    }
+
+    return acks.sort((a, b) => a.acknowledgedAt - b.acknowledgedAt)
+  }
+
+  async getAgentAcknowledgment(broadcastId: string, agentId: string): Promise<BroadcastAcknowledgment | null> {
+    const key = `${this.kvPrefix}:ack:${broadcastId}:${agentId}`
+    return await window.spark.kv.get<BroadcastAcknowledgment>(key) || null
+  }
+
+  async broadcastWithAck(
+    type: MConsoleBroadcast['type'],
+    payload: any,
+    message: string,
+    priority: 'low' | 'normal' | 'high' | 'critical',
+    broadcastBy: string,
+    targetAgents: string[],
+    autoExpireMs?: number
+  ): Promise<string> {
+    const broadcastId = await this.publishBroadcast(
+      type,
+      { ...payload, message, priority },
+      broadcastBy,
+      targetAgents,
+      true,
+      autoExpireMs
+    )
+
+    const trackedKey = `${this.kvPrefix}:tracked:${broadcastId}`
+    await window.spark.kv.set(trackedKey, {
+      id: broadcastId,
+      type,
+      message,
+      priority,
+      issuedBy: broadcastBy,
+      issuedAt: Date.now(),
+      targetAgents,
+      requiresAck: true,
+      autoExpireMs
+    })
+
+    return broadcastId
+  }
+
+  async getTrackedBroadcasts(): Promise<any[]> {
+    const allKeys = await window.spark.kv.keys()
+    const trackedKeys = allKeys.filter((key: string) => 
+      key.startsWith(`${this.kvPrefix}:tracked:`)
+    )
+    
+    const broadcasts: any[] = []
+    
+    for (const key of trackedKeys) {
+      const broadcast = await window.spark.kv.get<any>(key)
+      if (broadcast) {
+        const acknowledgments = await this.getAcknowledgments(broadcast.id)
+        broadcasts.push({
+          ...broadcast,
+          acknowledgments
+        })
+      }
+    }
+
+    return broadcasts.sort((a, b) => b.issuedAt - a.issuedAt)
+  }
+
+  async deleteTrackedBroadcast(broadcastId: string): Promise<void> {
+    const trackedKey = `${this.kvPrefix}:tracked:${broadcastId}`
+    await window.spark.kv.delete(trackedKey)
+
+    const allKeys = await window.spark.kv.keys()
+    const ackKeys = allKeys.filter((key: string) => 
+      key.startsWith(`${this.kvPrefix}:ack:${broadcastId}:`)
+    )
+    
+    for (const key of ackKeys) {
+      await window.spark.kv.delete(key)
+    }
   }
 }
 

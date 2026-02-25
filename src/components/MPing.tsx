@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Bell, Check } from '@phosphor-icons/react'
+import { Bell, Check, Warning, XCircle } from '@phosphor-icons/react'
 
 export interface PingMessage {
   id: string
@@ -9,14 +10,17 @@ export interface PingMessage {
   message: string
   priority: 'low' | 'normal' | 'high' | 'critical'
   acknowledged: boolean
+  broadcastId?: string
 }
 
 interface MPingProps {
   ping: PingMessage | null
-  onAcknowledge: (pingId: string) => void
+  onAcknowledge: (pingId: string, response?: 'acknowledged' | 'unable' | 'negative', message?: string) => void
 }
 
 export function MPing({ ping, onAcknowledge }: MPingProps) {
+  const [showOptions, setShowOptions] = useState(false)
+
   if (!ping || ping.acknowledged) return null
 
   const getPriorityColor = () => {
@@ -70,14 +74,81 @@ export function MPing({ ping, onAcknowledge }: MPingProps) {
         </div>
       </div>
       
-      <Button
-        onClick={() => onAcknowledge(ping.id)}
-        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold tracking-wider"
-        size="sm"
-      >
-        <Check weight="bold" size={16} className="mr-1" />
-        ACKNOWLEDGE
-      </Button>
+      {!showOptions ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            onClick={() => {
+              onAcknowledge(ping.id, 'acknowledged')
+              setShowOptions(false)
+            }}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold tracking-wider"
+            size="sm"
+          >
+            <Check weight="bold" size={16} className="mr-1" />
+            ACKNOWLEDGE
+          </Button>
+          <Button
+            onClick={() => setShowOptions(true)}
+            variant="outline"
+            className="font-bold tracking-wider"
+            size="sm"
+          >
+            MORE OPTIONS
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            Select response:
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              size="sm"
+              variant="default"
+              onClick={() => {
+                onAcknowledge(ping.id, 'acknowledged')
+                setShowOptions(false)
+              }}
+              className="text-[9px] h-8"
+            >
+              <Check weight="bold" size={12} className="mr-1" />
+              ACK
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onAcknowledge(ping.id, 'unable', 'Unable to comply')
+                setShowOptions(false)
+              }}
+              className="text-[9px] h-8 border-accent text-accent"
+            >
+              <Warning weight="bold" size={12} className="mr-1" />
+              UNABLE
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onAcknowledge(ping.id, 'negative', 'Negative')
+                setShowOptions(false)
+              }}
+              className="text-[9px] h-8 border-destructive text-destructive"
+            >
+              <XCircle weight="bold" size={12} className="mr-1" />
+              NEGATIVE
+            </Button>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowOptions(false)}
+            className="w-full text-[9px] h-6"
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
     </Card>
   )
 }
