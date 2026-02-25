@@ -1,7 +1,7 @@
 import type { AssetLocation, ActiveLane } from '@/components/GlobalAssetMap'
 import type { OpsFeedEntry } from '@/components/OperationsFeed'
 import type { PatrolRoute } from '@/components/PatrolRouteTemplates'
-import type { MapAnnotation } from '@/components/HybridTacticalMap'
+import type { MapAnnotation, AnnotationAcknowledgment } from '@/components/HybridTacticalMap'
 
 export interface ScenarioDeployment {
   id: string
@@ -367,6 +367,80 @@ class MConsoleSync {
 
   async setSharedAnnotations(annotations: MapAnnotation[]): Promise<void> {
     await window.spark.kv.set(`${this.kvPrefix}:shared-annotations`, annotations)
+  }
+
+  async recordAnnotationAcknowledgment(ack: AnnotationAcknowledgment): Promise<void> {
+    const key = `${this.kvPrefix}:annotation-ack:${ack.annotationId}:${ack.agentId}`
+    await window.spark.kv.set(key, ack)
+
+    const sharedAnnotations = await this.getSharedAnnotations()
+    const updatedAnnotations = sharedAnnotations.map(annotation => {
+      if (annotation.id === ack.annotationId) {
+        const existingAcks = annotation.acknowledgments || []
+        const filteredAcks = existingAcks.filter(a => a.agentId !== ack.agentId)
+        return {
+          ...annotation,
+          acknowledgments: [...filteredAcks, ack]
+        }
+      }
+      return annotation
+    })
+    
+    await this.setSharedAnnotations(updatedAnnotations)
+  }
+
+  async getAnnotationAcknowledgments(annotationId: string): Promise<AnnotationAcknowledgment[]> {
+    const allKeys = await window.spark.kv.keys()
+    const ackKeys = allKeys.filter((key: string) => 
+      key.startsWith(`${this.kvPrefix}:annotation-ack:${annotationId}:`)
+    )
+    
+    const acks: AnnotationAcknowledgment[] = []
+    
+    for (const key of ackKeys) {
+      const ack = await window.spark.kv.get<AnnotationAcknowledgment>(key)
+      if (ack) {
+        acks.push(ack)
+      }
+    }
+
+    return acks.sort((a, b) => a.acknowledgedAt - b.acknowledgedAt)
+  }
+
+  async getAgentAnnotationAcknowledgment(annotationId: string, agentId: string): Promise<AnnotationAcknowledgment | null> {
+    const key = `${this.kvPrefix}:annotation-ack:${annotationId}:${agentId}`
+    return await window.spark.kv.get<AnnotationAcknowledgment>(key) || null
+  }
+
+  async broadcastAnnotationWithAck(
+    annotation: MapAnnotation,
+    broadcastBy: string,
+    targetAgents: string[],
+    autoExpireMs?: number
+  ): Promise<string> {
+    const annotationWithAck = {
+      ...annotation,
+      requiresAck: true
+    }
+
+    const broadcastId = await this.publishBroadcast(
+      'annotation-update',
+      {
+        action: 'create',
+        annotation: annotationWithAck,
+        timestamp: Date.now(),
+        broadcastBy
+      },
+      broadcastBy,
+      targetAgents,
+      true,
+      autoExpireMs
+    )
+
+    const sharedAnnotations = await this.getSharedAnnotations()
+    await this.setSharedAnnotations([...sharedAnnotations, annotationWithAck])
+
+    return broadcastId
   }
 }
 

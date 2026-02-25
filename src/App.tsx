@@ -23,6 +23,7 @@ import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAc
 import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { BroadcastScheduler } from '@/components/BroadcastScheduler'
 import { AnnotationBroadcaster } from '@/components/AnnotationBroadcaster'
+import { AnnotationAcknowledgmentTracker } from '@/components/AnnotationAcknowledgmentTracker'
 import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
 import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
 import { soundGenerator } from '@/lib/sounds'
@@ -373,13 +374,15 @@ function App() {
       createdAt: Date.now()
     }
     setMapAnnotations((current) => [...(current || []), newAnnotation])
-    addLogEntry('mission', 'Area Marked', `${annotation.label} marked on tactical map`)
+    
+    const ackMsg = annotation.requiresAck ? ' (requires acknowledgment)' : ''
+    addLogEntry('mission', 'Area Marked', `${annotation.label} marked on tactical map${ackMsg}`)
     addOpsFeedEntry({
       agentCallsign: agentCallsign || 'SHADOW-7',
       agentId: agentId || 'shadow-7-alpha',
       type: 'mission',
-      message: `Map annotation: ${annotation.label}`,
-      priority: 'normal'
+      message: `Map annotation: ${annotation.label}${ackMsg}`,
+      priority: annotation.priority || 'normal'
     })
 
     await mConsoleSync.broadcastAnnotation('create', newAnnotation, undefined, agentCallsign || 'SHADOW-7')
@@ -391,6 +394,51 @@ function App() {
 
     await mConsoleSync.broadcastAnnotation('delete', undefined, annotationId, agentCallsign || 'SHADOW-7')
   }, [setMapAnnotations, addLogEntry, agentCallsign])
+
+  const handleAcknowledgeAnnotation = useCallback(async (
+    annotationId: string,
+    response: 'acknowledged' | 'unable' | 'noted',
+    message?: string
+  ) => {
+    const ack: import('@/components/HybridTacticalMap').AnnotationAcknowledgment = {
+      annotationId,
+      agentId: agentId || 'shadow-7-alpha',
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      acknowledgedAt: Date.now(),
+      response,
+      responseMessage: message
+    }
+
+    await mConsoleSync.recordAnnotationAcknowledgment(ack)
+
+    setMapAnnotations((current) => {
+      return (current || []).map(annotation => {
+        if (annotation.id === annotationId) {
+          const existingAcks = annotation.acknowledgments || []
+          const filteredAcks = existingAcks.filter(a => a.agentId !== ack.agentId)
+          return {
+            ...annotation,
+            acknowledgments: [...filteredAcks, ack]
+          }
+        }
+        return annotation
+      })
+    })
+
+    const responseText = response === 'acknowledged' ? 'Acknowledged' 
+      : response === 'unable' ? 'Unable to comply' 
+      : 'Noted'
+    
+    const annotation = mapAnnotations?.find(a => a.id === annotationId)
+    addLogEntry('info', 'Annotation Acknowledged', `${annotation?.label}: ${responseText}`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'check-in',
+      message: `Map annotation response: ${responseText}${message ? ` - ${message}` : ''}`,
+      priority: 'normal'
+    })
+  }, [agentId, agentCallsign, setMapAnnotations, mapAnnotations, addLogEntry, addOpsFeedEntry])
 
   const handleBroadcastAcknowledge = useCallback(async (
     broadcastId: string, 
@@ -610,14 +658,19 @@ function App() {
             return [...(current || []), annotationBroadcast.annotation!]
           })
           
-          addLogEntry('info', 'Map Annotation Received', `${annotationBroadcast.annotation.label} added by ${broadcast.broadcastBy}`)
+          const ackMsg = annotationBroadcast.annotation.requiresAck ? ' (requires acknowledgment)' : ''
+          addLogEntry('info', 'Map Annotation Received', `${annotationBroadcast.annotation.label} added by ${broadcast.broadcastBy}${ackMsg}`)
           addOpsFeedEntry({
             agentCallsign: broadcast.broadcastBy,
             agentId: 'M-CONSOLE',
             type: 'mission',
-            message: `Map marked: ${annotationBroadcast.annotation.label}`,
-            priority: 'normal'
+            message: `Map marked: ${annotationBroadcast.annotation.label}${ackMsg}`,
+            priority: annotationBroadcast.annotation.priority || 'normal'
           })
+
+          if (annotationBroadcast.annotation.requiresAck) {
+            soundGenerator.playActivityAlert('mission', annotationBroadcast.annotation.priority || 'normal')
+          }
         } else if (annotationBroadcast.action === 'delete' && annotationBroadcast.annotationId) {
           setMapAnnotations((current) => 
             (current || []).filter(a => a.id !== annotationBroadcast.annotationId)
@@ -1376,6 +1429,14 @@ function App() {
           maxHeight="300px"
           readEntries={new Set(readOpsFeedEntries || [])}
           onMarkAsRead={handleMarkOpsFeedAsRead}
+        />
+
+        <AnnotationAcknowledgmentTracker
+          annotations={mapAnnotations || []}
+          currentAgentId={agentId || 'shadow-7-alpha'}
+          currentAgentCallsign={agentCallsign || 'SHADOW-7'}
+          onAcknowledge={handleAcknowledgeAnnotation}
+          maxHeight="350px"
         />
 
         <BroadcastAcknowledgmentTracker 

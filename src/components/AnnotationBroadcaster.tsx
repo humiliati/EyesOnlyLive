@@ -44,7 +44,10 @@ export function AnnotationBroadcaster({
     type: 'marker' as MapAnnotation['type'],
     color: 'oklch(0.75 0.18 145)',
     lat: 40.7128,
-    lng: -74.0060
+    lng: -74.0060,
+    requiresAck: false,
+    priority: 'normal' as 'low' | 'normal' | 'high' | 'critical',
+    notes: ''
   })
 
   const filteredAnnotations = annotations.filter(annotation => {
@@ -77,17 +80,24 @@ export function AnnotationBroadcaster({
         color: newAnnotation.color,
         createdBy: currentUser,
         points: [{ lat: newAnnotation.lat, lng: newAnnotation.lng }],
-        radius: newAnnotation.type === 'circle' ? 500 : undefined
+        radius: newAnnotation.type === 'circle' ? 500 : undefined,
+        requiresAck: newAnnotation.requiresAck,
+        priority: newAnnotation.priority,
+        notes: newAnnotation.notes || undefined
       })
 
-      toast.success('Annotation broadcasted to all agents')
+      const ackMsg = newAnnotation.requiresAck ? ' (requires acknowledgment)' : ''
+      toast.success(`Annotation broadcasted to all agents${ackMsg}`)
       
       setNewAnnotation({
         label: '',
         type: 'marker',
         color: 'oklch(0.75 0.18 145)',
         lat: 40.7128,
-        lng: -74.0060
+        lng: -74.0060,
+        requiresAck: false,
+        priority: 'normal',
+        notes: ''
       })
       setShowCreateForm(false)
     }
@@ -215,7 +225,7 @@ export function AnnotationBroadcaster({
                   </Button>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Badge variant="outline" className="text-[9px] px-1.5 py-0">
                     {annotation.type}
                   </Badge>
@@ -224,7 +234,29 @@ export function AnnotationBroadcaster({
                       {annotation.points.length} PT{annotation.points.length > 1 ? 'S' : ''}
                     </Badge>
                   )}
+                  {annotation.requiresAck && (
+                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary text-primary">
+                      ACK REQUIRED
+                    </Badge>
+                  )}
+                  {annotation.priority && annotation.priority !== 'normal' && (
+                    <Badge 
+                      variant="outline" 
+                      className={`text-[9px] px-1.5 py-0 ${
+                        annotation.priority === 'critical' ? 'border-destructive text-destructive' :
+                        annotation.priority === 'high' ? 'border-accent text-accent' :
+                        'border-muted-foreground text-muted-foreground'
+                      }`}
+                    >
+                      {annotation.priority.toUpperCase()}
+                    </Badge>
+                  )}
                 </div>
+                {annotation.requiresAck && annotation.acknowledgments && (
+                  <div className="text-[9px] text-muted-foreground pl-6">
+                    {annotation.acknowledgments.length} agent{annotation.acknowledgments.length !== 1 ? 's' : ''} acknowledged
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -331,6 +363,47 @@ export function AnnotationBroadcaster({
                 className="h-8 text-xs tabular-nums"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] tracking-[0.08em] uppercase">Priority</Label>
+            <Select 
+              value={newAnnotation.priority} 
+              onValueChange={(value) => setNewAnnotation({ ...newAnnotation, priority: value as 'low' | 'normal' | 'high' | 'critical' })}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[10px] tracking-[0.08em] uppercase">Notes (Optional)</Label>
+            <Input
+              value={newAnnotation.notes}
+              onChange={(e) => setNewAnnotation({ ...newAnnotation, notes: e.target.value })}
+              placeholder="Additional information..."
+              className="h-8 text-xs"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="requires-ack"
+              checked={newAnnotation.requiresAck}
+              onChange={(e) => setNewAnnotation({ ...newAnnotation, requiresAck: e.target.checked })}
+              className="rounded border-border"
+            />
+            <Label htmlFor="requires-ack" className="text-xs cursor-pointer">
+              Require agent acknowledgment
+            </Label>
           </div>
 
           <Button

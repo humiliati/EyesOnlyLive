@@ -73,6 +73,19 @@ export interface MapAnnotation {
   createdAt: number
   points: Array<{ lat: number; lng: number }>
   radius?: number
+  requiresAck?: boolean
+  priority?: 'low' | 'normal' | 'high' | 'critical'
+  notes?: string
+  acknowledgments?: AnnotationAcknowledgment[]
+}
+
+export interface AnnotationAcknowledgment {
+  annotationId: string
+  agentId: string
+  agentCallsign: string
+  acknowledgedAt: number
+  response: 'acknowledged' | 'unable' | 'noted'
+  responseMessage?: string
 }
 
 interface HybridTacticalMapProps {
