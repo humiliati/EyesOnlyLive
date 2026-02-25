@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -227,35 +228,47 @@ export function OperationsFeed({
 
   return (
     <>
-    <Card 
-      data-panel-id="operations-feed"
-      className={`border-primary/30 p-4 space-y-3 relative transition-all ${
-        isDragging ? 'drag-target-glow opacity-70 scale-[0.98] cursor-grabbing' : 'cursor-grab hover:border-primary/50'
-      } ${isDragTarget ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''} ${
-        touchActive ? 'touch-active' : ''
-      }`}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = 'move'
-        onDragStart?.('operations-feed')
+    <motion.div
+      layout
+      initial={false}
+      transition={{
+        layout: {
+          type: "spring",
+          stiffness: 300,
+          damping: 30,
+          mass: 0.8
+        }
       }}
-      onDragEnd={() => {
-        onDragEnd?.()
-      }}
-      onDragOver={(e) => {
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-        onDragOver?.('operations-feed')
-      }}
-      onDragEnter={(e) => {
-        e.preventDefault()
-        onDragOver?.('operations-feed')
-      }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
     >
+      <Card 
+        data-panel-id="operations-feed"
+        className={`border-primary/30 p-4 space-y-3 relative transition-all ${
+          isDragging ? 'drag-target-glow opacity-70 scale-[0.98] cursor-grabbing' : 'cursor-grab hover:border-primary/50'
+        } ${isDragTarget ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''} ${
+          touchActive ? 'touch-active' : ''
+        }`}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move'
+          onDragStart?.('operations-feed')
+        }}
+        onDragEnd={() => {
+          onDragEnd?.()
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          onDragOver?.('operations-feed')
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault()
+          onDragOver?.('operations-feed')
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+      >
       <div 
         className="flex items-center justify-between cursor-pointer select-none"
         onClick={(e) => {
@@ -358,7 +371,8 @@ export function OperationsFeed({
           </div>
         </ScrollArea>
       )}
-    </Card>
+      </Card>
+    </motion.div>
     {ghostPosition && isTouchDragging.current && (
       <div
         ref={ghostRef}

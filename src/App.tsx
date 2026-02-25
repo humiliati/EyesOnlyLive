@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { LayoutGroup } from 'framer-motion'
 import { useKV } from '@github/spark/hooks'
 import { Toaster, toast } from 'sonner'
 import { Card } from '@/components/ui/card'
@@ -2335,6 +2336,7 @@ function App() {
           return null
         })}
 
+        <LayoutGroup>
         {(panelOrder || []).map((panelId) => {
           if (panelId === 'operations-feed') {
             return (
@@ -2371,6 +2373,7 @@ function App() {
 
           return null
         })}
+        </LayoutGroup>
 
         <AnnotationAcknowledgmentTracker
           annotations={mapAnnotations || []}
