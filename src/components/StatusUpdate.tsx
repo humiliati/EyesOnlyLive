@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   Package,
   Eye,
-  FirstAid
+  FirstAid,
+  CaretDown
 } from '@phosphor-icons/react'
 
 interface StatusUpdateProps {
@@ -20,6 +21,7 @@ interface StatusUpdateProps {
 
 export function StatusUpdate({ onStatusUpdate, agentCallsign }: StatusUpdateProps) {
   const [recentUpdate, setRecentUpdate] = useState<string | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   const handleUpdate = (status: string, type: string) => {
     onStatusUpdate(status, type)
@@ -40,10 +42,18 @@ export function StatusUpdate({ onStatusUpdate, agentCallsign }: StatusUpdateProp
 
   return (
     <Card className="border-primary/30 p-4 space-y-3">
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
         <div className="flex items-center gap-2">
           <CheckCircle weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Quick Status</span>
+          <CaretDown 
+            weight="bold" 
+            size={12} 
+            className={`text-primary transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+          />
         </div>
         {recentUpdate && (
           <Badge className="bg-primary text-primary-foreground text-[9px] px-2 py-0 animate-pulse">
@@ -52,30 +62,34 @@ export function StatusUpdate({ onStatusUpdate, agentCallsign }: StatusUpdateProp
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        {statusOptions.map((option) => {
-          const Icon = option.icon
-          return (
-            <Button
-              key={option.status}
-              onClick={() => handleUpdate(option.status, option.type)}
-              variant="outline"
-              className={`text-[9px] flex-col h-auto py-2 px-2 gap-1 border-primary/30 hover:bg-primary/20 hover:border-primary ${
-                recentUpdate === option.status ? 'bg-primary/30 border-primary' : ''
-              }`}
-              size="sm"
-              disabled={recentUpdate === option.status}
-            >
-              <Icon weight="bold" size={14} className={option.color} />
-              <span className="leading-tight text-center">{option.status}</span>
+      {!isCollapsed && (
+        <div className="grid grid-cols-2 gap-2">
+          {statusOptions.map((option) => {
+            const Icon = option.icon
+            return (
+              <Button
+                key={option.status}
+                onClick={() => handleUpdate(option.status, option.type)}
+                variant="outline"
+                className={`text-[9px] flex-col h-auto py-2 px-2 gap-1 border-primary/30 hover:bg-primary/20 hover:border-primary ${
+                  recentUpdate === option.status ? 'bg-primary/30 border-primary' : ''
+                }`}
+                size="sm"
+                disabled={recentUpdate === option.status}
+              >
+                <Icon weight="bold" size={14} className={option.color} />
+                <span className="leading-tight text-center">{option.status}</span>
             </Button>
           )
         })}
-      </div>
+        </div>
+      )}
 
-      <div className="text-[9px] text-center text-muted-foreground tracking-wider pt-1">
-        RAPID STATUS UPDATES TO M CONSOLE
-      </div>
+      {!isCollapsed && (
+        <div className="text-[9px] text-center text-muted-foreground tracking-wider pt-1">
+          RAPID STATUS UPDATES TO M CONSOLE
+        </div>
+      )}
     </Card>
   )
 }

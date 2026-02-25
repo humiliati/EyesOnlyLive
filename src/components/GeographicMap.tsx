@@ -19,7 +19,8 @@ import {
   Eye,
   Path,
   Plus,
-  Minus
+  Minus,
+  CaretDown
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
@@ -76,6 +77,8 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const mapRef = useRef<SVGSVGElement>(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isListCollapsed, setIsListCollapsed] = useState(false)
 
   const bounds = useMemo((): MapBounds => {
     if (assets.length === 0) {
@@ -272,10 +275,18 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
   return (
     <div className="space-y-4">
       <Card className="border-primary/30 p-4 space-y-3">
-        <div className="flex items-center justify-between">
+        <div 
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
           <div className="flex items-center gap-2">
             <Globe weight="bold" className="text-primary" size={16} />
             <span className="text-xs tracking-[0.08em] uppercase">Geographic Map View</span>
+            <CaretDown 
+              weight="bold" 
+              size={12} 
+              className={`text-primary transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+            />
           </div>
           <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary text-primary">
             <RadioButton weight="bold" size={10} className="mr-1 animate-pulse" />
@@ -283,7 +294,9 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
           </Badge>
         </div>
 
-        <Separator className="bg-border" />
+        {!isCollapsed && (
+          <>
+            <Separator className="bg-border" />
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -516,16 +529,27 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
             </div>
           </div>
         </div>
+          </>
+        )}
       </Card>
 
       <Card className="border-primary/30 p-4 space-y-3">
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => setIsListCollapsed(!isListCollapsed)}
+        >
           <MapPin weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Asset GPS List</span>
+          <CaretDown 
+            weight="bold" 
+            size={12} 
+            className={`text-primary transition-transform ${isListCollapsed ? '-rotate-90' : ''}`}
+          />
         </div>
 
-        <ScrollArea className="h-[200px]">
-          <div className="space-y-2 pr-3">
+        {!isListCollapsed && (
+          <ScrollArea className="h-[200px]">
+            <div className="space-y-2 pr-3">
             {assets.length === 0 ? (
               <div className="text-[10px] text-muted-foreground text-center py-4">
                 No assets tracked
@@ -602,8 +626,9 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
                 </div>
               ))
             )}
-          </div>
-        </ScrollArea>
+            </div>
+          </ScrollArea>
+        )}
       </Card>
 
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>

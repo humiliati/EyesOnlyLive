@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -10,7 +10,8 @@ import {
   Target,
   MapPin,
   Heart,
-  RadioButton
+  RadioButton,
+  CaretDown
 } from '@phosphor-icons/react'
 
 export interface LogEntry {
@@ -29,6 +30,7 @@ interface MissionLogProps {
 export function MissionLog({ entries, maxHeight = '300px' }: MissionLogProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevEntriesLength = useRef(entries.length)
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     if (entries.length > prevEntriesLength.current && scrollRef.current) {
@@ -100,32 +102,41 @@ export function MissionLog({ entries, maxHeight = '300px' }: MissionLogProps) {
 
   return (
     <Card className="border-primary/30 p-4 space-y-3">
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
         <div className="flex items-center gap-2">
           <ClockCounterClockwise weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Mission Log</span>
+          <CaretDown 
+            weight="bold" 
+            size={12} 
+            className={`text-primary transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+          />
         </div>
         <Badge variant="outline" className="text-[9px] px-2 py-0 border-primary text-primary">
           {entries.length} EVENTS
         </Badge>
       </div>
 
-      <ScrollArea ref={scrollRef} style={{ height: maxHeight }} className="pr-3">
-        <div className="space-y-2">
-          {entries.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-[10px] tracking-wider">
-              NO EVENTS LOGGED
-            </div>
-          ) : (
-            entries.map((entry, index) => (
-              <div
-                key={entry.id}
-                className={`border-l-2 ${getTypeColor(entry.type)} pl-3 pb-2 ${
-                  index === entries.length - 1 ? '' : 'border-b border-border/30 mb-2'
-                }`}
-              >
-                <div className="flex items-start gap-2">
-                  <div className="mt-0.5">{getIcon(entry.type)}</div>
+      {!isCollapsed && (
+        <ScrollArea ref={scrollRef} style={{ height: maxHeight }} className="pr-3">
+          <div className="space-y-2">
+            {entries.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground text-[10px] tracking-wider">
+                NO EVENTS LOGGED
+              </div>
+            ) : (
+              entries.map((entry, index) => (
+                <div
+                  key={entry.id}
+                  className={`border-l-2 ${getTypeColor(entry.type)} pl-3 pb-2 ${
+                    index === entries.length - 1 ? '' : 'border-b border-border/30 mb-2'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="mt-0.5">{getIcon(entry.type)}</div>
                   <div className="flex-1 space-y-0.5">
                     <div className="flex items-start justify-between gap-2">
                       <div className="text-[11px] font-medium leading-tight">{entry.title}</div>
@@ -146,8 +157,9 @@ export function MissionLog({ entries, maxHeight = '300px' }: MissionLogProps) {
               </div>
             ))
           )}
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      )}
     </Card>
   )
 }

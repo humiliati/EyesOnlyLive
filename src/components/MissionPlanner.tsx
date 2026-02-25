@@ -20,7 +20,8 @@ import {
   X,
   Compass,
   ArrowRight,
-  NavigationArrow
+  NavigationArrow,
+  CaretDown
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import type { AssetLocation } from './GeographicMap'
@@ -86,6 +87,7 @@ export function MissionPlanner({ assets, onWaypointCreated, onMeasurementCreated
   const [waypoints, setWaypoints] = useState<Waypoint[]>([])
   const [measurements, setMeasurements] = useState<DistanceMeasurement[]>([])
   const [activeTab, setActiveTab] = useState<'waypoints' | 'measurements' | 'tools'>('tools')
+  const [isCollapsed, setIsCollapsed] = useState(false)
   
   const [newWaypoint, setNewWaypoint] = useState({
     name: '',
@@ -324,15 +326,26 @@ export function MissionPlanner({ assets, onWaypointCreated, onMeasurementCreated
   return (
     <>
       <Card className="border-primary/30 p-4 space-y-3">
-        <div className="flex items-center justify-between">
+        <div 
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
           <div className="flex items-center gap-2">
             <Ruler weight="bold" className="text-primary" size={16} />
             <span className="text-xs tracking-[0.08em] uppercase">Mission Planner</span>
+            <CaretDown 
+              weight="bold" 
+              size={12} 
+              className={`text-primary transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+            />
           </div>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setShowDialog(true)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowDialog(true)
+            }}
             className="text-[9px] h-6 px-2"
           >
             <Target weight="bold" size={12} className="mr-1" />
@@ -340,7 +353,9 @@ export function MissionPlanner({ assets, onWaypointCreated, onMeasurementCreated
           </Button>
         </div>
 
-        <Separator className="bg-border" />
+        {!isCollapsed && (
+          <>
+            <Separator className="bg-border" />
 
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="border border-border rounded p-2 bg-card/50">
@@ -385,6 +400,8 @@ export function MissionPlanner({ assets, onWaypointCreated, onMeasurementCreated
               ))}
             </div>
           </div>
+        )}
+          </>
         )}
       </Card>
 

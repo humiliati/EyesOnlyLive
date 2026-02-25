@@ -16,7 +16,8 @@ import {
   Eye,
   Download,
   Trash,
-  ArrowsOut
+  ArrowsOut,
+  CaretDown
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
@@ -46,6 +47,8 @@ export function GPSBreadcrumbTrail({ trails, onClearTrail, onExportTrail }: GPSB
   const [showDetailsDialog, setShowDetailsDialog] = useState(false)
   const [viewMode, setViewMode] = useState<'timeline' | 'map'>('timeline')
   const [selectedCoordinate, setSelectedCoordinate] = useState<GPSCoordinate | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isListCollapsed, setIsListCollapsed] = useState(false)
 
   const getSelectedTrail = useCallback(() => {
     if (!selectedAsset) return null
@@ -185,17 +188,27 @@ export function GPSBreadcrumbTrail({ trails, onClearTrail, onExportTrail }: GPSB
   return (
     <div className="space-y-4">
       <Card className="border-primary/30 p-4 space-y-3">
-        <div className="flex items-center justify-between">
+        <div 
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
           <div className="flex items-center gap-2">
             <Path weight="bold" className="text-primary" size={16} />
             <span className="text-xs tracking-[0.08em] uppercase">GPS Breadcrumb Trails</span>
+            <CaretDown 
+              weight="bold" 
+              size={12} 
+              className={`text-primary transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+            />
           </div>
           <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary text-primary">
             {trails.length} ASSET{trails.length !== 1 ? 'S' : ''}
           </Badge>
         </div>
 
-        <Separator className="bg-border" />
+        {!isCollapsed && (
+          <>
+            <Separator className="bg-border" />
 
         <div className="grid grid-cols-3 gap-3 text-center">
           <div>
@@ -218,15 +231,27 @@ export function GPSBreadcrumbTrail({ trails, onClearTrail, onExportTrail }: GPSB
             </div>
           </div>
         </div>
+          </>
+        )}
       </Card>
 
       <Card className="border-primary/30 p-4 space-y-3">
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => setIsListCollapsed(!isListCollapsed)}
+        >
           <Crosshair weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Asset Movement History</span>
+          <CaretDown 
+            weight="bold" 
+            size={12} 
+            className={`text-primary transition-transform ${isListCollapsed ? '-rotate-90' : ''}`}
+          />
         </div>
 
-        <Separator className="bg-border" />
+        {!isListCollapsed && (
+          <>
+            <Separator className="bg-border" />
 
         <ScrollArea className="h-[300px]">
           <div className="space-y-2 pr-3">
@@ -333,8 +358,10 @@ export function GPSBreadcrumbTrail({ trails, onClearTrail, onExportTrail }: GPSB
                 )
               })
             )}
-          </div>
-        </ScrollArea>
+            </div>
+          </ScrollArea>
+          </>
+        )}
       </Card>
 
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>

@@ -12,7 +12,8 @@ import {
   RadioButton,
   Eye,
   ShieldCheck,
-  Crosshair
+  Crosshair,
+  CaretDown
 } from '@phosphor-icons/react'
 
 export interface OpsFeedEntry {
@@ -44,6 +45,7 @@ export function OperationsFeed({
   const prevEntriesLength = useRef(entries.length)
   const entryRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const observerRef = useRef<IntersectionObserver | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     if (entries.length > prevEntriesLength.current && scrollRef.current) {
@@ -160,10 +162,18 @@ export function OperationsFeed({
 
   return (
     <Card className="border-primary/30 p-4 space-y-3 relative">
-      <div className="flex items-center justify-between">
+      <div 
+        className="flex items-center justify-between cursor-pointer"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
         <div className="flex items-center gap-2">
           <Users weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Blue Team Ops</span>
+          <CaretDown 
+            weight="bold" 
+            size={12} 
+            className={`text-primary transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+          />
           {unreadCount > 0 && (
             <div className="relative">
               <Badge className="bg-destructive text-destructive-foreground text-[9px] px-1.5 py-0 h-4 min-w-4 flex items-center justify-center animate-pulse">
@@ -181,8 +191,9 @@ export function OperationsFeed({
         </Badge>
       </div>
 
-      <ScrollArea ref={scrollRef} style={{ height: maxHeight }} className="pr-3">
-        <div className="space-y-2">
+      {!isCollapsed && (
+        <ScrollArea ref={scrollRef} style={{ height: maxHeight }} className="pr-3">
+          <div className="space-y-2">
           {entries.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-[10px] tracking-wider">
               NO TEAM ACTIVITY
@@ -247,8 +258,9 @@ export function OperationsFeed({
               )
             })
           )}
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+      )}
     </Card>
   )
 }
