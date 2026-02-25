@@ -29,6 +29,11 @@ import { OverdueAnnotationAlerts } from '@/components/OverdueAnnotationAlerts'
 import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
 import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
 import { GeofencingAlerts, type GeofenceViolation } from '@/components/GeofencingAlerts'
+import { CommunicationsLog, type CommLog } from '@/components/CommunicationsLog'
+import { AssetStatusBoard, type AssetStatus } from '@/components/AssetStatusBoard'
+import { TacticalChecklist, type Checklist, type ChecklistItem } from '@/components/TacticalChecklist'
+import { EnvironmentalData } from '@/components/EnvironmentalData'
+import { AfterActionReport } from '@/components/AfterActionReport'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { gameStateSync, type GameState } from '@/lib/gameStateSync'
@@ -102,6 +107,8 @@ function App() {
   const [redTeamPlayers] = useKV<import('@/components/RedTeamManagementPanel').RedTeamPlayer[]>('red-team-players', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
   const [redTeamTelemetry, setRedTeamTelemetry] = useState<import('@/lib/gameStateSync').PlayerTelemetry[]>([])
+  const [commLogs, setCommLogs] = useKV<CommLog[]>('communications-log', [])
+  const [checklists, setChecklists] = useKV<Checklist[]>('tactical-checklists', [])
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -218,7 +225,21 @@ function App() {
       priority: 'normal'
     })
     addLogEntry('transmission', 'Response Sent to M', response)
-  }, [addOpsFeedEntry, addLogEntry, agentCallsign, agentId])
+
+    const newCommLog: CommLog = {
+      id: `comm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      direction: 'outgoing',
+      from: agentCallsign || 'SHADOW-7',
+      to: 'M-CONSOLE',
+      message: response,
+      channel: 'tactical',
+      priority: 'normal',
+      encrypted: true,
+      acknowledged: false
+    }
+    setCommLogs((current) => [...(current || []), newCommLog])
+  }, [addOpsFeedEntry, addLogEntry, agentCallsign, agentId, setCommLogs])
 
   const handleStatusUpdate = useCallback((status: string, type: string) => {
     addOpsFeedEntry({
@@ -290,6 +311,44 @@ function App() {
       )
     })
   }, [setLogEntries])
+
+  const handleToggleChecklistItem = useCallback((checklistId: string, itemId: string) => {
+    setChecklists((current) => {
+      return (current || []).map(checklist => {
+        if (checklist.id !== checklistId) return checklist
+
+        const updatedItems = checklist.items.map(item => {
+          if (item.id !== itemId) return item
+          return {
+            ...item,
+            completed: !item.completed,
+            completedAt: !item.completed ? Date.now() : undefined,
+            completedBy: !item.completed ? agentCallsign || 'SHADOW-7' : undefined
+          }
+        })
+
+        const completedCount = updatedItems.filter(i => i.completed).length
+        return { ...checklist, items: updatedItems, completedCount, totalCount: updatedItems.length }
+      })
+    })
+  }, [setChecklists, agentCallsign])
+
+  const handleAddChecklist = useCallback((checklist: Omit<Checklist, 'id' | 'createdAt' | 'completedCount' | 'totalCount'>) => {
+    const newChecklist: Checklist = {
+      ...checklist,
+      id: `checklist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: Date.now(),
+      completedCount: 0,
+      totalCount: checklist.items.length
+    }
+    setChecklists((current) => [...(current || []), newChecklist])
+    addLogEntry('info', 'Checklist Created', `${checklist.name} with ${checklist.items.length} items`)
+  }, [setChecklists, addLogEntry])
+
+  const handleDeleteChecklist = useCallback((checklistId: string) => {
+    setChecklists((current) => (current || []).filter(c => c.id !== checklistId))
+    addLogEntry('info', 'Checklist Deleted', 'Checklist removed from system')
+  }, [setChecklists, addLogEntry])
 
   const handleDispatchAsset = useCallback((assetId: string, targetGrid: { x: number; y: number }, message: string) => {
     setAssetLocations((current) => {
@@ -960,6 +1019,36 @@ function App() {
   }, [opsFeedEntries, addOpsFeedEntry])
 
   useEffect(() => {
+    if (checklists && checklists.length === 0) {
+      const defaultChecklists: Omit<Checklist, 'id' | 'createdAt' | 'completedCount' | 'totalCount'>[] = [
+        {
+          name: 'Pre-Mission Equipment Check',
+          category: 'pre-mission',
+          items: [
+            { id: 'item-1', text: 'Verify communications device fully charged', completed: false, priority: 'critical' },
+            { id: 'item-2', text: 'Test encrypted radio channels', completed: false, priority: 'high' },
+            { id: 'item-3', text: 'Confirm GPS coordinates calibrated', completed: false, priority: 'high' },
+            { id: 'item-4', text: 'Check biometric sensors operational', completed: false, priority: 'normal' },
+            { id: 'item-5', text: 'Review mission briefing and objectives', completed: false, priority: 'critical' }
+          ]
+        },
+        {
+          name: 'Field Safety Protocol',
+          category: 'safety',
+          items: [
+            { id: 'item-1', text: 'Establish emergency extraction point', completed: false, priority: 'critical' },
+            { id: 'item-2', text: 'Verify panic button functionality', completed: false, priority: 'critical' },
+            { id: 'item-3', text: 'Confirm backup communications channel', completed: false, priority: 'high' },
+            { id: 'item-4', text: 'Identify nearest safe house location', completed: false, priority: 'high' }
+          ]
+        }
+      ]
+
+      defaultChecklists.forEach(checklist => handleAddChecklist(checklist))
+    }
+  }, [checklists, handleAddChecklist])
+
+  useEffect(() => {
     const pingMessages = [
       { message: 'Status check: Confirm operational status', priority: 'normal' as const },
       { message: 'Intelligence update: New target coordinates received', priority: 'high' as const },
@@ -979,11 +1068,25 @@ function App() {
           acknowledged: false
         })
         addLogEntry('info', 'Incoming Message from M', randomMessage.message)
+
+        const newCommLog: CommLog = {
+          id: `comm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+          direction: 'incoming',
+          from: 'M-CONSOLE',
+          to: agentCallsign || 'SHADOW-7',
+          message: randomMessage.message,
+          channel: randomMessage.priority === 'critical' ? 'emergency' : 'secure',
+          priority: randomMessage.priority,
+          encrypted: true,
+          acknowledged: false
+        }
+        setCommLogs((current) => [...(current || []), newCommLog])
       }
     }, 45000 + Math.random() * 30000)
 
     return () => clearInterval(pingInterval)
-  }, [currentPing, setCurrentPing, addLogEntry])
+  }, [currentPing, setCurrentPing, addLogEntry, agentCallsign, setCommLogs])
 
   useEffect(() => {
     const blueTeamAgents = [
@@ -1232,6 +1335,51 @@ function App() {
   const redTeamAssets = useMemo(() => {
     return allAssets.filter(asset => asset.status === 'alert')
   }, [allAssets])
+
+  const assetStatusData = useMemo((): AssetStatus[] => {
+    return allAssets.map(asset => {
+      const isOperational = asset.status === 'active'
+      const isDegraded = asset.status === 'enroute'
+      const isCritical = asset.status === 'alert'
+      const isOffline = asset.status === 'inactive'
+
+      const heartRate = isCritical ? 145 + Math.random() * 20 : 
+                        isDegraded ? 95 + Math.random() * 20 :
+                        70 + Math.random() * 15
+
+      const stressLevel = isCritical ? 75 + Math.random() * 20 :
+                          isDegraded ? 50 + Math.random() * 20 :
+                          15 + Math.random() * 25
+
+      const batteryLevel = isOffline ? Math.random() * 15 :
+                           isCritical ? 25 + Math.random() * 20 :
+                           60 + Math.random() * 40
+
+      const signalStrength = isOffline ? Math.random() * 20 :
+                             isCritical ? 35 + Math.random() * 30 :
+                             70 + Math.random() * 30
+
+      const missionReady = isOperational && batteryLevel > 30 && signalStrength > 50
+
+      const equipmentStatus: 'green' | 'amber' | 'red' = 
+        isCritical || batteryLevel < 20 ? 'red' :
+        isDegraded || batteryLevel < 40 ? 'amber' :
+        'green'
+
+      return {
+        id: asset.id,
+        callsign: asset.callsign,
+        status: isOffline ? 'offline' : isCritical ? 'critical' : isDegraded ? 'degraded' : 'operational',
+        heartRate: Math.round(heartRate),
+        stressLevel: Math.round(stressLevel),
+        batteryLevel: Math.round(batteryLevel),
+        signalStrength: Math.round(signalStrength),
+        lastUpdate: asset.lastUpdate,
+        missionReady,
+        equipmentStatus
+      }
+    })
+  }, [allAssets])
   
   if (!missionData) return null
 
@@ -1324,6 +1472,17 @@ function App() {
               onDeleteAnnotation={handleDeleteAnnotation}
               onCreateAnnotation={handleCreateAnnotation}
               currentUser="M-CONSOLE"
+            />
+
+            <AssetStatusBoard
+              assets={assetStatusData}
+              maxHeight="500px"
+              onSelectAsset={(assetId) => {
+                const asset = allAssets.find(a => a.id === assetId)
+                if (asset) {
+                  addLogEntry('info', 'Asset Selected', `Viewing status for ${asset.callsign}`)
+                }
+              }}
             />
           </>
         )}
@@ -1595,6 +1754,39 @@ function App() {
         />
 
         <MissionLog entries={logEntries || []} maxHeight="350px" />
+
+        <CommunicationsLog
+          logs={commLogs || []}
+          maxHeight="400px"
+          onExport={() => {
+            addLogEntry('info', 'Comms Log Exported', `${commLogs?.length || 0} communications exported`)
+          }}
+        />
+
+        <TacticalChecklist
+          checklists={checklists || []}
+          currentUser={agentCallsign || 'SHADOW-7'}
+          maxHeight="500px"
+          onToggleItem={handleToggleChecklistItem}
+          onAddChecklist={handleAddChecklist}
+          onDeleteChecklist={handleDeleteChecklist}
+        />
+
+        <EnvironmentalData
+          latitude={location.latitude}
+          longitude={location.longitude}
+        />
+
+        <AfterActionReport
+          missionName={missionData.name}
+          missionObjective={missionData.objective}
+          startTime={missionData.startTime}
+          endTime={missionData.progress >= 100 ? Date.now() : undefined}
+          logEntries={logEntries || []}
+          opsFeedEntries={opsFeedEntries || []}
+          assets={allAssets}
+          agentCallsign={agentCallsign || 'SHADOW-7'}
+        />
 
         <HistoricalLogViewer 
           entries={logEntries || []} 
