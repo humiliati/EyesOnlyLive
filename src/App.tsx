@@ -101,6 +101,7 @@ interface MissionData {
 }
 
 type DataCardId = 'agent-id' | 'biometrics' | 'location' | 'transmission'
+type PanelId = 'operations-feed' | 'mission-log' | string
 
 function App() {
   const [isTransmitting, setIsTransmitting] = useKV<boolean>('transmission-active', false)
@@ -115,6 +116,12 @@ function App() {
   ])
   const [draggingCardId, setDraggingCardId] = useState<DataCardId | null>(null)
   const [dragOverCardId, setDragOverCardId] = useState<DataCardId | null>(null)
+  const [panelOrder, setPanelOrder] = useKV<PanelId[]>('panel-order', [
+    'operations-feed',
+    'mission-log'
+  ])
+  const [draggingPanelId, setDraggingPanelId] = useState<PanelId | null>(null)
+  const [dragOverPanelId, setDragOverPanelId] = useState<PanelId | null>(null)
   const [missionData, setMissionData] = useKV<MissionData>('mission-data', {
     name: 'OPERATION NIGHTFALL',
     objective: 'Secure Package Alpha',
@@ -294,6 +301,42 @@ function App() {
       setDragOverCardId(cardId as DataCardId)
     }
   }, [draggingCardId])
+
+  const handlePanelDragStart = useCallback((panelId: string) => {
+    setDraggingPanelId(panelId as PanelId)
+    soundGenerator.playActivityAlert('check-in', 'low')
+  }, [])
+
+  const handlePanelDragEnd = useCallback(() => {
+    if (draggingPanelId && dragOverPanelId && draggingPanelId !== dragOverPanelId) {
+      setPanelOrder((current) => {
+        const newOrder = [...(current || [])]
+        const dragIndex = newOrder.indexOf(draggingPanelId)
+        const dropIndex = newOrder.indexOf(dragOverPanelId)
+        
+        if (dragIndex !== -1 && dropIndex !== -1) {
+          newOrder.splice(dragIndex, 1)
+          newOrder.splice(dropIndex, 0, draggingPanelId)
+          soundGenerator.playActivityAlert('transmission', 'normal')
+          
+          toast.success('Panel order updated', {
+            description: 'Feed arrangement saved',
+            duration: 1500,
+          })
+        }
+        
+        return newOrder
+      })
+    }
+    setDraggingPanelId(null)
+    setDragOverPanelId(null)
+  }, [draggingPanelId, dragOverPanelId, setPanelOrder])
+
+  const handlePanelDragOver = useCallback((panelId: string) => {
+    if (draggingPanelId && panelId !== draggingPanelId) {
+      setDragOverPanelId(panelId as PanelId)
+    }
+  }, [draggingPanelId])
 
   const handleQuickResponse = useCallback((response: string, category: string) => {
     addOpsFeedEntry({
@@ -2292,13 +2335,42 @@ function App() {
           return null
         })}
 
-        <OperationsFeed 
-          entries={opsFeedEntries || []} 
-          currentAgentId={agentId || 'shadow-7-alpha'} 
-          maxHeight="300px"
-          readEntries={new Set(readOpsFeedEntries || [])}
-          onMarkAsRead={handleMarkOpsFeedAsRead}
-        />
+        {(panelOrder || []).map((panelId) => {
+          if (panelId === 'operations-feed') {
+            return (
+              <OperationsFeed 
+                key="operations-feed"
+                entries={opsFeedEntries || []} 
+                currentAgentId={agentId || 'shadow-7-alpha'} 
+                maxHeight="300px"
+                readEntries={new Set(readOpsFeedEntries || [])}
+                onMarkAsRead={handleMarkOpsFeedAsRead}
+                onDragStart={handlePanelDragStart}
+                onDragEnd={handlePanelDragEnd}
+                onDragOver={handlePanelDragOver}
+                isDragging={draggingPanelId === 'operations-feed'}
+                isDragTarget={dragOverPanelId === 'operations-feed'}
+              />
+            )
+          }
+
+          if (panelId === 'mission-log') {
+            return (
+              <MissionLog 
+                key="mission-log"
+                entries={logEntries || []} 
+                maxHeight="350px"
+                onDragStart={handlePanelDragStart}
+                onDragEnd={handlePanelDragEnd}
+                onDragOver={handlePanelDragOver}
+                isDragging={draggingPanelId === 'mission-log'}
+                isDragTarget={dragOverPanelId === 'mission-log'}
+              />
+            )
+          }
+
+          return null
+        })}
 
         <AnnotationAcknowledgmentTracker
           annotations={mapAnnotations || []}
@@ -2312,8 +2384,6 @@ function App() {
           broadcasts={trackedBroadcasts || []}
           maxHeight="400px"
         />
-
-        <MissionLog entries={logEntries || []} maxHeight="350px" />
 
         <CommunicationsLog
           logs={commLogs || []}

@@ -25,9 +25,22 @@ export interface LogEntry {
 interface MissionLogProps {
   entries: LogEntry[]
   maxHeight?: string
+  onDragStart?: (id: string) => void
+  onDragEnd?: () => void
+  onDragOver?: (id: string) => void
+  isDragging?: boolean
+  isDragTarget?: boolean
 }
 
-export function MissionLog({ entries, maxHeight = '300px' }: MissionLogProps) {
+export function MissionLog({ 
+  entries, 
+  maxHeight = '300px',
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  isDragging = false,
+  isDragTarget = false
+}: MissionLogProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevEntriesLength = useRef(entries.length)
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -101,7 +114,28 @@ export function MissionLog({ entries, maxHeight = '300px' }: MissionLogProps) {
   }
 
   return (
-    <Card className="border-primary/30 p-4 space-y-3">
+    <Card 
+      className={`border-primary/30 p-4 space-y-3 transition-all cursor-move ${
+        isDragging ? 'drag-target-glow opacity-70 scale-[0.98]' : ''
+      } ${isDragTarget ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart?.('mission-log')
+      }}
+      onDragEnd={() => {
+        onDragEnd?.()
+      }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        onDragOver?.('mission-log')
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault()
+        onDragOver?.('mission-log')
+      }}
+    >
       <div 
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setIsCollapsed(!isCollapsed)}

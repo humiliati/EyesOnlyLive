@@ -32,6 +32,11 @@ interface OperationsFeedProps {
   maxHeight?: string
   readEntries?: Set<string>
   onMarkAsRead?: (entryId: string) => void
+  onDragStart?: (id: string) => void
+  onDragEnd?: () => void
+  onDragOver?: (id: string) => void
+  isDragging?: boolean
+  isDragTarget?: boolean
 }
 
 export function OperationsFeed({ 
@@ -39,7 +44,12 @@ export function OperationsFeed({
   currentAgentId, 
   maxHeight = '400px',
   readEntries = new Set(),
-  onMarkAsRead
+  onMarkAsRead,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  isDragging = false,
+  isDragTarget = false
 }: OperationsFeedProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevEntriesLength = useRef(entries.length)
@@ -161,7 +171,28 @@ export function OperationsFeed({
   }
 
   return (
-    <Card className="border-primary/30 p-4 space-y-3 relative">
+    <Card 
+      className={`border-primary/30 p-4 space-y-3 relative transition-all cursor-move ${
+        isDragging ? 'drag-target-glow opacity-70 scale-[0.98]' : ''
+      } ${isDragTarget ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart?.('operations-feed')
+      }}
+      onDragEnd={() => {
+        onDragEnd?.()
+      }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        onDragOver?.('operations-feed')
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault()
+        onDragOver?.('operations-feed')
+      }}
+    >
       <div 
         className="flex items-center justify-between cursor-pointer"
         onClick={() => setIsCollapsed(!isCollapsed)}
