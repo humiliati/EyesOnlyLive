@@ -18,6 +18,7 @@ import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/component
 import { GeographicMap } from '@/components/GeographicMap'
 import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/components/GPSBreadcrumbTrail'
 import { ScenarioCreator } from '@/components/ScenarioCreator'
+import { HybridTacticalMap } from '@/components/HybridTacticalMap'
 import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
 import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { BroadcastScheduler } from '@/components/BroadcastScheduler'
@@ -1103,6 +1104,16 @@ function App() {
         <PatrolRouteTemplates
           onRouteDeployed={handleRouteDeployed}
           onWaypointsCreated={handleRouteWaypointsCreated}
+        />
+
+        <HybridTacticalMap 
+          assets={assetLocations || []}
+          lanes={activeLanes || []}
+          onAssetClick={(asset) => {
+            addLogEntry('info', 'Asset Selected', `Viewing details for ${asset.callsign}`)
+          }}
+          onDispatchAsset={handleDispatchAsset}
+          onCreateLane={handleCreateLane}
         />
 
         <GeographicMap 
