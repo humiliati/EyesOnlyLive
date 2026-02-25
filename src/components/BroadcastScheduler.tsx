@@ -23,7 +23,9 @@ import {
   CheckCircle,
   ClockCountdown,
   Calendar,
-  Repeat
+  Repeat,
+  CaretDown,
+  CaretUp
 } from '@phosphor-icons/react'
 
 export interface ScheduledBroadcast {
@@ -55,6 +57,7 @@ interface BroadcastSchedulerProps {
 }
 
 export function BroadcastScheduler({ assets, onBroadcastScheduled }: BroadcastSchedulerProps) {
+  const [isExpanded, setIsExpanded] = useState(true)
   const [scheduledBroadcasts, setScheduledBroadcasts] = useKV<ScheduledBroadcast[]>('scheduled-broadcasts', [])
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -357,10 +360,18 @@ export function BroadcastScheduler({ assets, onBroadcastScheduled }: BroadcastSc
   return (
     <Card className="border-primary/30 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+        >
+          {isExpanded ? (
+            <CaretDown weight="bold" className="text-primary" size={12} />
+          ) : (
+            <CaretUp weight="bold" className="text-primary" size={12} />
+          )}
           <CalendarPlus weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Broadcast Scheduler</span>
-        </div>
+        </button>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" variant="default" className="h-6 text-[9px]">
@@ -549,6 +560,8 @@ export function BroadcastScheduler({ assets, onBroadcastScheduled }: BroadcastSc
         </Dialog>
       </div>
 
+      {isExpanded && (
+        <>
       <Separator className="bg-border" />
 
       {(!scheduledBroadcasts || scheduledBroadcasts.length === 0) ? (
@@ -739,6 +752,8 @@ export function BroadcastScheduler({ assets, onBroadcastScheduled }: BroadcastSc
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </Card>
   )
 }

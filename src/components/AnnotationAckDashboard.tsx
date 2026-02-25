@@ -4,6 +4,7 @@ import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
+import { useState } from 'react'
 import { 
   ChartBar, 
   MapPin, 
@@ -13,7 +14,9 @@ import {
   Warning,
   Users,
   Target,
-  ArrowsClockwise
+  ArrowsClockwise,
+  CaretDown,
+  CaretUp
 } from '@phosphor-icons/react'
 import type { MapAnnotation } from '@/components/HybridTacticalMap'
 import type { AssetLocation } from '@/components/GlobalAssetMap'
@@ -43,6 +46,7 @@ export function AnnotationAckDashboard({
   maxHeight = "500px",
   onRefresh
 }: AnnotationAckDashboardProps) {
+  const [isExpanded, setIsExpanded] = useState(true)
   const now = Date.now()
   
   const requiresAckAnnotations = annotations.filter(a => a.requiresAck)
@@ -131,20 +135,30 @@ export function AnnotationAckDashboard({
     return (
       <Card className="border-primary/30 p-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+          >
+            {isExpanded ? (
+              <CaretDown weight="bold" className="text-primary" size={12} />
+            ) : (
+              <CaretUp weight="bold" className="text-primary" size={12} />
+            )}
             <ChartBar weight="bold" className="text-primary" size={16} />
             <span className="text-xs tracking-[0.08em] uppercase">Annotation ACK Dashboard</span>
-          </div>
+          </button>
           {onRefresh && (
             <Button size="sm" variant="ghost" onClick={onRefresh} className="h-6 w-6 p-0">
               <ArrowsClockwise weight="bold" size={14} />
             </Button>
           )}
         </div>
+        {isExpanded && (
         <div className="text-center py-8 text-muted-foreground">
           <MapPin weight="bold" size={32} className="mx-auto mb-2 opacity-30" />
           <div className="text-xs">No annotations requiring acknowledgment</div>
         </div>
+        )}
       </Card>
     )
   }
@@ -152,10 +166,18 @@ export function AnnotationAckDashboard({
   return (
     <Card className="border-primary/30 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+        >
+          {isExpanded ? (
+            <CaretDown weight="bold" className="text-primary" size={12} />
+          ) : (
+            <CaretUp weight="bold" className="text-primary" size={12} />
+          )}
           <ChartBar weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Annotation ACK Dashboard</span>
-        </div>
+        </button>
         {onRefresh && (
           <Button size="sm" variant="ghost" onClick={onRefresh} className="h-6 w-6 p-0">
             <ArrowsClockwise weight="bold" size={14} />
@@ -163,6 +185,8 @@ export function AnnotationAckDashboard({
         )}
       </div>
       
+      {isExpanded && (
+        <>
       <div className="grid grid-cols-2 gap-3">
         <Card className="bg-card/50 border-primary/20 p-3">
           <div className="flex items-center gap-2 mb-2">
@@ -341,6 +365,8 @@ export function AnnotationAckDashboard({
           })}
         </div>
       </ScrollArea>
+      </>
+      )}
     </Card>
   )
 }

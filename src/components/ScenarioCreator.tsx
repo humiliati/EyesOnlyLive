@@ -20,7 +20,9 @@ import {
   CheckCircle,
   MapPin,
   ListBullets,
-  Clock
+  Clock,
+  CaretDown,
+  CaretUp
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import type { ActiveLane, AssetLocation } from '@/components/GlobalAssetMap'
@@ -35,6 +37,7 @@ interface ScenarioCreatorProps {
 }
 
 export function ScenarioCreator({ assets, onScenarioDeployed }: ScenarioCreatorProps) {
+  const [isExpanded, setIsExpanded] = useState(true)
   const [scenarioName, setScenarioName] = useState('')
   const [scenarioDescription, setScenarioDescription] = useState('')
   const [briefing, setBriefing] = useState('')
@@ -225,16 +228,24 @@ export function ScenarioCreator({ assets, onScenarioDeployed }: ScenarioCreatorP
     <div className="space-y-4">
       <Card className="border-primary/30 p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+          >
+            {isExpanded ? (
+              <CaretDown weight="bold" className="text-primary" size={16} />
+            ) : (
+              <CaretUp weight="bold" className="text-primary" size={16} />
+            )}
             <Desktop weight="bold" className="text-primary" size={20} />
             <span className="text-sm tracking-[0.08em] uppercase">M Console - Scenario Creator</span>
-          </div>
+          </button>
           <Badge variant="outline" className="text-[9px] px-2 py-0 border-primary text-primary">
             DESKTOP ONLY
           </Badge>
         </div>
 
-        {activeScenario && (
+        {isExpanded && activeScenario && (
           <div className="bg-primary/10 border border-primary/30 p-3 rounded space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -264,6 +275,7 @@ export function ScenarioCreator({ assets, onScenarioDeployed }: ScenarioCreatorP
         )}
       </Card>
 
+      {isExpanded && (
       <Tabs defaultValue="creator" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="creator">Scenario Creator</TabsTrigger>
@@ -526,6 +538,7 @@ export function ScenarioCreator({ assets, onScenarioDeployed }: ScenarioCreatorP
           </Card>
         </TabsContent>
       </Tabs>
+      )}
 
       <Dialog open={showLaneDialog} onOpenChange={setShowLaneDialog}>
         <DialogContent className="bg-card border-primary/30">

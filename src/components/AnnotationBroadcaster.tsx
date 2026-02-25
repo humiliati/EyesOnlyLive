@@ -18,7 +18,9 @@ import {
   Target,
   Broadcast,
   Eye,
-  EyeSlash
+  EyeSlash,
+  CaretDown,
+  CaretUp
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import type { MapAnnotation } from './HybridTacticalMap'
@@ -36,6 +38,7 @@ export function AnnotationBroadcaster({
   onCreateAnnotation,
   currentUser = 'M-CONSOLE'
 }: AnnotationBroadcasterProps) {
+  const [isExpanded, setIsExpanded] = useState(true)
   const [filter, setFilter] = useState<'all' | 'mine' | 'others'>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -126,15 +129,25 @@ export function AnnotationBroadcaster({
   return (
     <Card className="border-primary/30 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+        >
+          {isExpanded ? (
+            <CaretDown weight="bold" className="text-primary" size={12} />
+          ) : (
+            <CaretUp weight="bold" className="text-primary" size={12} />
+          )}
           <Broadcast weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Map Annotations</span>
-        </div>
+        </button>
         <Badge variant="outline" className="text-[9px] px-2">
           {annotations.length} TOTAL
         </Badge>
       </div>
 
+      {isExpanded && (
+        <>
       <Separator className="bg-border" />
 
       <div className="flex gap-2">
@@ -414,6 +427,8 @@ export function AnnotationBroadcaster({
             Broadcast to All Agents
           </Button>
         </div>
+      )}
+      </>
       )}
     </Card>
   )

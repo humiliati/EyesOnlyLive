@@ -21,7 +21,9 @@ import {
   Target,
   RadioButton,
   PaperPlaneTilt,
-  Plus
+  Plus,
+  CaretDown,
+  CaretUp
 } from '@phosphor-icons/react'
 
 export interface BroadcastTemplate {
@@ -163,6 +165,7 @@ interface BroadcastTemplatesProps {
 }
 
 export function BroadcastTemplates({ assets, onBroadcastSent }: BroadcastTemplatesProps) {
+  const [isExpanded, setIsExpanded] = useState(true)
   const [templates] = useState<BroadcastTemplate[]>(defaultTemplates)
   const [selectedTemplate, setSelectedTemplate] = useState<BroadcastTemplate | null>(null)
   const [customMessage, setCustomMessage] = useState('')
@@ -290,10 +293,18 @@ export function BroadcastTemplates({ assets, onBroadcastSent }: BroadcastTemplat
   return (
     <Card className="border-primary/30 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+        >
+          {isExpanded ? (
+            <CaretDown weight="bold" className="text-primary" size={12} />
+          ) : (
+            <CaretUp weight="bold" className="text-primary" size={12} />
+          )}
           <Megaphone weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Broadcast Templates</span>
-        </div>
+        </button>
         <Dialog open={isCustomDialogOpen} onOpenChange={setIsCustomDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" variant="outline" className="h-6 text-[9px]">
@@ -378,6 +389,8 @@ export function BroadcastTemplates({ assets, onBroadcastSent }: BroadcastTemplat
         </Dialog>
       </div>
 
+      {isExpanded && (
+        <>
       <Separator className="bg-border" />
 
       <div className="space-y-2">
@@ -543,6 +556,8 @@ export function BroadcastTemplates({ assets, onBroadcastSent }: BroadcastTemplat
           })}
         </div>
       </ScrollArea>
+      </>
+      )}
     </Card>
   )
 }
