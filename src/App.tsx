@@ -28,6 +28,7 @@ import { AnnotationAckDashboard } from '@/components/AnnotationAckDashboard'
 import { OverdueAnnotationAlerts } from '@/components/OverdueAnnotationAlerts'
 import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
 import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
+import { GeofencingAlerts, type GeofenceViolation } from '@/components/GeofencingAlerts'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { gameStateSync, type GameState } from '@/lib/gameStateSync'
@@ -380,6 +381,18 @@ function App() {
   const handleRouteWaypointsCreated = useCallback((waypoints: Waypoint[]) => {
     setMissionWaypoints((current) => [...(current || []), ...waypoints])
   }, [setMissionWaypoints])
+
+  const handleGeofenceViolation = useCallback((violation: GeofenceViolation) => {
+    addLogEntry('critical', 'GEOFENCE BREACH', `${violation.redTeamCallsign} entered restricted zone: ${violation.annotationLabel}`)
+    addOpsFeedEntry({
+      agentCallsign: 'M-CONSOLE',
+      agentId: 'M-CONSOLE',
+      type: 'alert',
+      message: `⚠️ GEOFENCE ALERT: ${violation.redTeamCallsign} breached ${violation.annotationLabel}`,
+      priority: 'critical'
+    })
+    soundGenerator.playActivityAlert('alert', 'critical')
+  }, [addLogEntry, addOpsFeedEntry])
 
   const handleCreateAnnotation = useCallback(async (annotation: Omit<MapAnnotation, 'id' | 'createdAt'>) => {
     const newAnnotation: MapAnnotation = {
@@ -1215,6 +1228,10 @@ function App() {
     
     return [...blueTeamAssets, ...redTeamAssets]
   }, [assetLocations, redTeamPlayers, redTeamTelemetry])
+
+  const redTeamAssets = useMemo(() => {
+    return allAssets.filter(asset => asset.status === 'alert')
+  }, [allAssets])
   
   if (!missionData) return null
 
@@ -1264,6 +1281,13 @@ function App() {
             <RedTeamManagementPanel maxHeight="600px" />
 
             <RedTeamTelemetryPanel maxHeight="500px" />
+
+            <GeofencingAlerts
+              annotations={mapAnnotations || []}
+              redTeamAssets={redTeamAssets}
+              maxHeight="500px"
+              onViolationDetected={handleGeofenceViolation}
+            />
 
             <AnnotationAckDashboard
               annotations={mapAnnotations || []}
