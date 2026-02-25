@@ -52,6 +52,7 @@ import { DebriefMediaFeed, addDebriefEntryFromWindow } from '@/components/Debrie
 import { BusinessPartnershipSummary } from '@/components/BusinessPartnershipSummary'
 import { BusinessPartnershipDirectory } from '@/components/BusinessPartnershipDirectory'
 import { BusinessMapOverlay } from '@/components/BusinessMapOverlay'
+import { AddBusinessPartnerDialog, type BusinessPartner } from '@/components/AddBusinessPartnerDialog'
 import { 
   Heart, 
   MapPin, 
@@ -126,6 +127,9 @@ function App() {
   const [deployLocation, setDeployLocation] = useState<{ gridX: number; gridY: number } | undefined>()
   const [highlightedBusinessId, setHighlightedBusinessId] = useState<string | null>(null)
   const [mapFocusGrid, setMapFocusGrid] = useState<{ x: number; y: number } | null>(null)
+  const [businessPartners, setBusinessPartners] = useKV<BusinessPartner[]>('business-partners', [])
+  const [addBusinessDialogOpen, setAddBusinessDialogOpen] = useState(false)
+  const [selectedGridForBusiness, setSelectedGridForBusiness] = useState<{ x: number; y: number } | undefined>()
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -397,6 +401,23 @@ function App() {
       setCommLogs((current) => [...(current || []), newCommLog])
     }
   }, [addLogEntry, addOpsFeedEntry, agentCallsign, agentId, setCommLogs])
+
+  const handleBusinessAdded = useCallback((business: BusinessPartner) => {
+    setBusinessPartners((current) => [...(current || []), business])
+    
+    const gridLocation = business.gridX !== undefined && business.gridY !== undefined
+      ? `Grid ${String.fromCharCode(65 + business.gridX)}${business.gridY + 1}`
+      : 'location not specified'
+    
+    addLogEntry('mission', 'Business Partner Added', `${business.businessName} - ${gridLocation}`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'mission',
+      message: `Business partner registered: ${business.businessName}`,
+      priority: 'normal'
+    })
+  }, [setBusinessPartners, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
 
   const handleEquipmentRetrieved = useCallback((item: EquipmentItem) => {
     addLogEntry('success', 'Equipment Retrieved', `${item.name} (${item.serialNumber}) recovered from ${item.assignedToType}: ${item.assignedToName}`)
@@ -1483,6 +1504,13 @@ function App() {
                 const newState = await gameStateSync.getGameState()
                 setGameState(newState)
               }}
+            />
+
+            <AddBusinessPartnerDialog
+              open={addBusinessDialogOpen}
+              onOpenChange={setAddBusinessDialogOpen}
+              onBusinessAdded={handleBusinessAdded}
+              preselectedGrid={selectedGridForBusiness}
             />
 
             <BusinessMapOverlay
