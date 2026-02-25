@@ -130,6 +130,8 @@ function App() {
   const [businessPartners, setBusinessPartners] = useKV<BusinessPartner[]>('business-partners', [])
   const [addBusinessDialogOpen, setAddBusinessDialogOpen] = useState(false)
   const [selectedGridForBusiness, setSelectedGridForBusiness] = useState<{ x: number; y: number } | undefined>()
+  const [deadDropAutoFill, setDeadDropAutoFill] = useState<{ gridX: number; gridY: number; businessName?: string; businessId?: string } | undefined>()
+  const [realWorldItems, setRealWorldItems] = useKV<import('@/components/RealWorldItemCrafter').RealWorldItem[]>('real-world-items', [])
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -1523,6 +1525,59 @@ function App() {
                 setMapFocusGrid({ x: gridX, y: gridY })
                 toast.success(`Navigate to Grid ${String.fromCharCode(65 + gridX)}${gridY + 1}`)
               }}
+              onItemDroppedOnGrid={(item, gridX, gridY) => {
+                setRealWorldItems((current) => {
+                  return (current || []).map(i => {
+                    if (i.id === item.id) {
+                      return {
+                        ...i,
+                        deployed: true,
+                        deployedAt: Date.now(),
+                        businessOwner: {
+                          ...i.businessOwner,
+                          gridX,
+                          gridY
+                        }
+                      }
+                    }
+                    return i
+                  })
+                })
+
+                const businessAtLocation = businessPartners?.find(b => 
+                  b.gridX === gridX && b.gridY === gridY
+                )
+
+                setDeadDropAutoFill({
+                  gridX,
+                  gridY,
+                  businessName: businessAtLocation?.businessName,
+                  businessId: businessAtLocation?.id
+                })
+
+                addLogEntry('mission', 'Item Dropped on Map', `${item.name} assigned to Grid ${String.fromCharCode(65 + gridX)}${gridY + 1}`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Real-world item deployed to grid: ${item.emoji} ${item.name}`,
+                  priority: 'high'
+                })
+
+                toast.success(`Create dead drop at this location?`, {
+                  action: {
+                    label: 'Create',
+                    onClick: () => {
+                      setDeadDropAutoFill({
+                        gridX,
+                        gridY,
+                        businessName: businessAtLocation?.businessName,
+                        businessId: businessAtLocation?.id
+                      })
+                    }
+                  }
+                })
+              }}
             />
 
             <BusinessPartnershipDirectory 
@@ -1626,6 +1681,7 @@ function App() {
               assets={allAssets}
               maxHeight="600px"
               currentUser={agentCallsign || 'M-CONSOLE'}
+              autoFillLocation={deadDropAutoFill}
               onDropCreated={(drop) => {
                 addLogEntry('mission', 'Dead Drop Created', `${drop.name} placed at Grid ${String.fromCharCode(65 + drop.gridX)}${drop.gridY + 1}`)
                 addOpsFeedEntry({
@@ -1642,6 +1698,8 @@ function App() {
                   description: `Location: Grid ${String.fromCharCode(65 + drop.gridX)}${drop.gridY + 1}`,
                   gridLocation: `${String.fromCharCode(65 + drop.gridX)}${drop.gridY + 1}`
                 })
+
+                setDeadDropAutoFill(undefined)
               }}
               onDropRetrieved={(drop, items) => {
                 addLogEntry('success', 'Dead Drop Retrieved', `${items.length} items collected from ${drop.name}`)

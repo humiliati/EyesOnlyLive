@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useKV } from '@github/spark/hooks'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,11 +20,14 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Warning
+  Warning,
+  Building
 } from '@phosphor-icons/react'
 import { liveArgSync, type DeadDropLocation } from '@/lib/liveArgSync'
 import { rogueItemRegistry, type RogueItem } from '@/lib/goneRogueDataRegistry'
 import { type AssetLocation } from '@/components/GlobalAssetMap'
+import { type RealWorldItem } from '@/components/RealWorldItemCrafter'
+import { type BusinessPartner } from '@/components/BusinessPartnershipDirectory'
 import { toast } from 'sonner'
 
 interface DeadDropManagerProps {
@@ -32,6 +36,7 @@ interface DeadDropManagerProps {
   onDropCreated?: (drop: DeadDropLocation) => void
   onDropRetrieved?: (drop: DeadDropLocation, items: RogueItem[]) => void
   currentUser: string
+  autoFillLocation?: { gridX: number; gridY: number; businessName?: string; businessId?: string }
 }
 
 export function DeadDropManager({ 
@@ -39,12 +44,15 @@ export function DeadDropManager({
   maxHeight = '600px',
   onDropCreated,
   onDropRetrieved,
-  currentUser 
+  currentUser,
+  autoFillLocation
 }: DeadDropManagerProps) {
   const [drops, setDrops] = useState<DeadDropLocation[]>([])
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [availableItems, setAvailableItems] = useState<RogueItem[]>([])
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
+  const [realWorldItems] = useKV<RealWorldItem[]>('real-world-items', [])
+  const [businesses] = useKV<BusinessPartner[]>('business-partners', [])
   
   const [newDrop, setNewDrop] = useState<Partial<DeadDropLocation>>({
     name: '',
@@ -56,6 +64,41 @@ export function DeadDropManager({
     requiresCode: false,
     code: ''
   })
+
+  useEffect(() => {
+    if (autoFillLocation) {
+      setNewDrop((current) => ({
+        ...current,
+        gridX: autoFillLocation.gridX,
+        gridY: autoFillLocation.gridY,
+        name: autoFillLocation.businessName 
+          ? `${autoFillLocation.businessName} DROP`
+          : `GRID ${String.fromCharCode(65 + autoFillLocation.gridX)}${autoFillLocation.gridY + 1} DROP`
+      }))
+
+      const itemsAtLocation = realWorldItems?.filter(item => 
+        item.deployed &&
+        item.businessOwner.gridX === autoFillLocation.gridX && 
+        item.businessOwner.gridY === autoFillLocation.gridY
+      )
+
+      if (itemsAtLocation && itemsAtLocation.length > 0) {
+        const firstItem = itemsAtLocation[0]
+        if (firstItem.businessOwner.latitude && firstItem.businessOwner.longitude) {
+          setNewDrop((current) => ({
+            ...current,
+            latitude: firstItem.businessOwner.latitude,
+            longitude: firstItem.businessOwner.longitude
+          }))
+        }
+        toast.success(`Found ${itemsAtLocation.length} real-world item(s) at this location`)
+      }
+
+      if (!createDialogOpen) {
+        setCreateDialogOpen(true)
+      }
+    }
+  }, [autoFillLocation, realWorldItems, createDialogOpen])
 
   useEffect(() => {
     loadDrops()
@@ -344,6 +387,50 @@ export function DeadDropManager({
                     </div>
                   </ScrollArea>
                 </div>
+
+                {newDrop.gridX !== undefined && newDrop.gridY !== undefined && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Building weight="bold" className="text-accent" size={14} />
+                      <Label className="text-xs">Real-World Items at Grid {String.fromCharCode(65 + newDrop.gridX)}{newDrop.gridY + 1}</Label>
+                    </div>
+                    {(() => {
+                      const itemsAtLocation = realWorldItems?.filter(item => 
+                        item.deployed &&
+                        item.businessOwner.gridX === newDrop.gridX && 
+                        item.businessOwner.gridY === newDrop.gridY
+                      )
+                      
+                      if (!itemsAtLocation || itemsAtLocation.length === 0) {
+                        return (
+                          <div className="text-[10px] text-muted-foreground border border-border/50 rounded p-2">
+                            No real-world items deployed at this location
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="border border-accent/30 rounded p-2 space-y-1.5 bg-accent/5">
+                          {itemsAtLocation.map((item) => (
+                            <div key={item.id} className="flex items-center gap-2 text-xs p-1.5 bg-card rounded">
+                              <div className="text-lg">{item.emoji}</div>
+                              <div className="flex-1">
+                                <div className="font-bold">{item.name}</div>
+                                <div className="text-[9px] text-muted-foreground flex items-center gap-1">
+                                  <Building size={9} />
+                                  {item.businessOwner.businessName}
+                                </div>
+                              </div>
+                              <Badge className="bg-accent/20 text-accent text-[8px] px-1 py-0">
+                                {item.type}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
 
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">

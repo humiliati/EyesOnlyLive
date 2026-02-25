@@ -1,24 +1,28 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Building, Package, MapPin } from '@phosphor-icons/react'
 import { type BusinessPartner } from '@/components/BusinessPartnershipDirectory'
 import { type RealWorldItem } from '@/components/RealWorldItemCrafter'
+import { toast } from 'sonner'
 
 interface BusinessMapOverlayProps {
   maxHeight?: string
   onBusinessClick?: (businessId: string) => void
   onNavigateToGrid?: (gridX: number, gridY: number) => void
+  onItemDroppedOnGrid?: (item: RealWorldItem, gridX: number, gridY: number) => void
 }
 
 export function BusinessMapOverlay({ 
   maxHeight = '400px',
   onBusinessClick,
-  onNavigateToGrid
+  onNavigateToGrid,
+  onItemDroppedOnGrid
 }: BusinessMapOverlayProps) {
   const [businesses] = useKV<BusinessPartner[]>('business-partners', [])
   const [items] = useKV<RealWorldItem[]>('real-world-items', [])
+  const [dragOverGrid, setDragOverGrid] = useState<{ x: number; y: number } | null>(null)
 
   const gridSize = 8
 
@@ -47,13 +51,53 @@ export function BusinessMapOverlay({
     return grid
   }, [businesses, items])
 
+  const handleDrop = (e: React.DragEvent, gridX: number, gridY: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverGrid(null)
+
+    try {
+      const itemData = e.dataTransfer.getData('application/json')
+      if (itemData) {
+        const item: RealWorldItem = JSON.parse(itemData)
+        if (onItemDroppedOnGrid) {
+          onItemDroppedOnGrid(item, gridX, gridY)
+        }
+        toast.success(`${item.emoji} ${item.name} dropped on Grid ${String.fromCharCode(65 + gridX)}${gridY + 1}`)
+      }
+    } catch (error) {
+      toast.error('Failed to drop item')
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent, gridX: number, gridY: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragOverGrid({ x: gridX, y: gridY })
+  }
+
+  const handleDragLeave = () => {
+    setDragOverGrid(null)
+  }
+
   const renderGridCell = (gridX: number, gridY: number) => {
     const key = `${gridX},${gridY}`
     const data = gridData.get(key)
+    const isDragOver = dragOverGrid?.x === gridX && dragOverGrid?.y === gridY
     
     if (!data || data.businesses.length === 0) {
       return (
-        <div className="w-full h-full bg-muted/20 border border-border/30 flex items-center justify-center">
+        <div 
+          className={`w-full h-full border border-border/30 flex items-center justify-center transition-all ${
+            isDragOver 
+              ? 'bg-primary/30 border-primary border-2 scale-95' 
+              : 'bg-muted/20'
+          }`}
+          onDrop={(e) => handleDrop(e, gridX, gridY)}
+          onDragOver={(e) => handleDragOver(e, gridX, gridY)}
+          onDragLeave={handleDragLeave}
+        >
           <span className="text-[8px] text-muted-foreground opacity-50">
             {String.fromCharCode(65 + gridX)}{gridY + 1}
           </span>
@@ -63,13 +107,20 @@ export function BusinessMapOverlay({
 
     return (
       <div 
-        className="w-full h-full bg-accent/20 border-2 border-accent hover:bg-accent/30 cursor-pointer transition-all relative group"
+        className={`w-full h-full border-2 hover:bg-accent/30 cursor-pointer transition-all relative group ${
+          isDragOver 
+            ? 'bg-primary/40 border-primary scale-95' 
+            : 'bg-accent/20 border-accent'
+        }`}
         onClick={() => {
           onNavigateToGrid?.(gridX, gridY)
           if (data.businesses.length === 1) {
             onBusinessClick?.(data.businesses[0].id)
           }
         }}
+        onDrop={(e) => handleDrop(e, gridX, gridY)}
+        onDragOver={(e) => handleDragOver(e, gridX, gridY)}
+        onDragLeave={handleDragLeave}
       >
         <div className="absolute inset-0 flex flex-col items-center justify-center p-0.5">
           <div className="flex items-center gap-0.5 mb-0.5">
@@ -144,6 +195,16 @@ export function BusinessMapOverlay({
         </div>
         <div className="font-mono">
           {gridData.size} active grids
+        </div>
+      </div>
+
+      <div className="mt-2 p-2 bg-primary/10 border border-primary/30 rounded text-[10px] text-primary">
+        <div className="flex items-center gap-1 font-bold mb-0.5">
+          <Package weight="bold" size={12} />
+          <span>Drag & Drop Items</span>
+        </div>
+        <div className="text-[9px] text-muted-foreground">
+          Drag real-world items from inventory onto the map to deploy them to specific business locations
         </div>
       </div>
     </Card>

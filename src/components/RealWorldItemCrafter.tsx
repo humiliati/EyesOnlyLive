@@ -52,6 +52,7 @@ interface RealWorldItemCrafterProps {
   maxHeight?: string
   onItemCrafted?: (item: RealWorldItem) => void
   onItemDeployed?: (item: RealWorldItem) => void
+  onItemDragStart?: (item: RealWorldItem) => void
 }
 
 const ITEM_TYPES = [
@@ -76,12 +77,14 @@ const RARITY_OPTIONS = [
 export function RealWorldItemCrafter({ 
   maxHeight = '600px',
   onItemCrafted,
-  onItemDeployed
+  onItemDeployed,
+  onItemDragStart
 }: RealWorldItemCrafterProps) {
   const [items, setItems] = useKV<RealWorldItem[]>('real-world-items', [])
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [photoUploadInput, setPhotoUploadInput] = useState('')
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
+  const [draggedItem, setDraggedItem] = useState<RealWorldItem | null>(null)
 
   const [itemData, setItemData] = useState({
     name: '',
@@ -529,7 +532,27 @@ export function RealWorldItemCrafter({
           )}
 
           {items?.map((item) => (
-            <Card key={item.id} className="border-border p-3 space-y-3">
+            <Card 
+              key={item.id} 
+              className={`border-border p-3 space-y-3 transition-all ${
+                !item.deployed ? 'cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-lg' : ''
+              } ${draggedItem?.id === item.id ? 'opacity-50 scale-95' : ''}`}
+              draggable={!item.deployed}
+              onDragStart={(e) => {
+                if (!item.deployed) {
+                  setDraggedItem(item)
+                  e.dataTransfer.effectAllowed = 'copy'
+                  e.dataTransfer.setData('application/json', JSON.stringify(item))
+                  e.dataTransfer.setData('text/plain', `${item.emoji} ${item.name}`)
+                  if (onItemDragStart) {
+                    onItemDragStart(item)
+                  }
+                }
+              }}
+              onDragEnd={() => {
+                setDraggedItem(null)
+              }}
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 flex-1 min-w-0">
                   <div className="text-2xl flex-shrink-0">{item.emoji}</div>
@@ -538,6 +561,11 @@ export function RealWorldItemCrafter({
                     <div className="text-[10px] text-muted-foreground">ID: {item.itemId}</div>
                     {item.description && (
                       <div className="text-xs text-muted-foreground mt-1">{item.description}</div>
+                    )}
+                    {!item.deployed && (
+                      <Badge variant="outline" className="mt-1 text-[8px] px-1 py-0 border-primary text-primary">
+                        DRAG TO MAP/BUSINESS
+                      </Badge>
                     )}
                   </div>
                 </div>
