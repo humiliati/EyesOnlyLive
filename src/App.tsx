@@ -19,6 +19,7 @@ import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/compo
 import { ScenarioCreator } from '@/components/ScenarioCreator'
 import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
 import { BroadcastTemplates } from '@/components/BroadcastTemplates'
+import { BroadcastScheduler } from '@/components/BroadcastScheduler'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { 
@@ -984,6 +985,13 @@ function App() {
               assets={assetLocations || []}
               onScenarioDeployed={(scenario) => {
                 addLogEntry('mission', 'Scenario Deployed', `${scenario.name} deployed by M console`)
+              }}
+            />
+            
+            <BroadcastScheduler
+              assets={assetLocations || []}
+              onBroadcastScheduled={(broadcast) => {
+                addLogEntry('info', 'Broadcast Scheduled', `"${broadcast.name}" scheduled for ${broadcast.scheduleType === 'once' ? 'one-time delivery' : 'recurring delivery'}`)
               }}
             />
             
