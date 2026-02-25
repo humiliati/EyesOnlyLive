@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -52,12 +53,15 @@ import {
   Archive,
   Tag,
   CheckSquare,
-  Square
+  Square,
+  NotePencil,
+  Note
 } from '@phosphor-icons/react'
 
 export interface EnhancedLogEntry extends LogEntry {
   archived?: boolean
   tags?: string[]
+  note?: string
 }
 
 interface HistoricalLogViewerProps {
@@ -65,12 +69,13 @@ interface HistoricalLogViewerProps {
   onDeleteEntries?: (entryIds: string[]) => void
   onArchiveEntries?: (entryIds: string[], archived: boolean) => void
   onTagEntries?: (entryIds: string[], tags: string[]) => void
+  onAddNote?: (entryId: string, note: string) => void
 }
 
 type FilterType = 'all' | 'archived' | LogEntry['type']
 type TimeRange = 'all' | '1h' | '6h' | '24h' | '7d'
 
-export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries, onTagEntries }: HistoricalLogViewerProps) {
+export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries, onTagEntries, onAddNote }: HistoricalLogViewerProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<FilterType>('all')
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
@@ -79,6 +84,8 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [newTag, setNewTag] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  const [noteText, setNoteText] = useState('')
 
   const filteredEntries = useMemo(() => {
     let filtered = [...entries]
@@ -92,6 +99,7 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
       filtered = filtered.filter(entry => 
         entry.title.toLowerCase().includes(query) ||
         entry.details?.toLowerCase().includes(query) ||
+        entry.note?.toLowerCase().includes(query) ||
         entry.tags?.some(tag => tag.toLowerCase().includes(query))
       )
     }
@@ -152,6 +160,7 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
       type: entry.type,
       title: entry.title,
       details: entry.details || '',
+      note: entry.note || '',
       archived: entry.archived || false,
       tags: entry.tags || []
     }))
@@ -243,6 +252,30 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
         toast.success(`Removed tag "${tagToRemove}"`)
       }
     }
+  }
+
+  const handleStartEditNote = (entryId: string, existingNote?: string) => {
+    setEditingNoteId(entryId)
+    setNoteText(existingNote || '')
+  }
+
+  const handleSaveNote = (entryId: string) => {
+    if (onAddNote && noteText.trim()) {
+      onAddNote(entryId, noteText.trim())
+      toast.success('Note added to log entry')
+      setEditingNoteId(null)
+      setNoteText('')
+    } else if (onAddNote && !noteText.trim()) {
+      onAddNote(entryId, '')
+      toast.success('Note removed from log entry')
+      setEditingNoteId(null)
+      setNoteText('')
+    }
+  }
+
+  const handleCancelEditNote = () => {
+    setEditingNoteId(null)
+    setNoteText('')
   }
 
   const getIcon = (type: LogEntry['type']) => {
@@ -642,6 +675,74 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
                                   </Badge>
                                 ))}
                               </div>
+                            )}
+                            
+                            {editingNoteId === entry.id ? (
+                              <div className="space-y-2 pt-1">
+                                <Textarea
+                                  value={noteText}
+                                  onChange={(e) => setNoteText(e.target.value)}
+                                  placeholder="Add annotation note..."
+                                  className="text-[11px] min-h-[60px] border-primary/30 bg-background resize-none"
+                                  autoFocus
+                                />
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleSaveNote(entry.id)}
+                                    className="h-6 px-2 text-[10px] border-primary/30 hover:bg-primary/10"
+                                  >
+                                    <Note size={12} weight="bold" className="mr-1" />
+                                    SAVE NOTE
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleCancelEditNote}
+                                    className="h-6 px-2 text-[10px]"
+                                  >
+                                    <X size={12} weight="bold" className="mr-1" />
+                                    CANCEL
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                {entry.note && (
+                                  <div className="bg-accent/10 border border-accent/30 rounded p-2 space-y-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1">
+                                        <Note size={12} weight="bold" className="text-accent" />
+                                        <span className="text-[9px] tracking-wider text-accent uppercase">Annotation</span>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleStartEditNote(entry.id, entry.note)}
+                                        className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-foreground"
+                                      >
+                                        <NotePencil size={10} weight="bold" className="mr-0.5" />
+                                        EDIT
+                                      </Button>
+                                    </div>
+                                    <div className="text-[11px] text-foreground leading-snug whitespace-pre-wrap">
+                                      {entry.note}
+                                    </div>
+                                  </div>
+                                )}
+                                {!entry.note && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleStartEditNote(entry.id)}
+                                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                                  >
+                                    <NotePencil size={12} weight="bold" className="mr-1" />
+                                    ADD NOTE
+                                  </Button>
+                                )}
+                              </>
                             )}
                             
                             <div className="flex items-center gap-3 text-[9px] text-muted-foreground/70">

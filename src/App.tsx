@@ -210,6 +210,14 @@ function App() {
     })
   }, [setLogEntries])
 
+  const handleAddNote = useCallback((entryId: string, note: string) => {
+    setLogEntries((current) => {
+      return (current || []).map(entry => 
+        entry.id === entryId ? { ...entry, note: note || undefined } : entry
+      )
+    })
+  }, [setLogEntries])
+
   useEffect(() => {
     if (currentPing && !currentPing.acknowledged) {
       if (previousPingIdRef.current !== currentPing.id) {
@@ -708,6 +716,7 @@ function App() {
           onDeleteEntries={handleDeleteEntries}
           onArchiveEntries={handleArchiveEntries}
           onTagEntries={handleTagEntries}
+          onAddNote={handleAddNote}
         />
 
         {batteryLevel < 20 && (
