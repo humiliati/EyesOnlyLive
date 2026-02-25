@@ -61,6 +61,7 @@ function App() {
   const [logEntries, setLogEntries] = useKV<LogEntry[]>('mission-log', [])
   const [currentPing, setCurrentPing] = useKV<PingMessage | null>('current-m-ping', null)
   const [opsFeedEntries, setOpsFeedEntries] = useKV<OpsFeedEntry[]>('ops-feed', [])
+  const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -126,6 +127,18 @@ function App() {
       }
     }
   }, [currentPing])
+
+  useEffect(() => {
+    if (opsFeedEntries && opsFeedEntries.length > previousOpsFeedLengthRef.current) {
+      if (previousOpsFeedLengthRef.current > 0) {
+        const latestEntry = opsFeedEntries[opsFeedEntries.length - 1]
+        if (latestEntry.agentId !== agentId) {
+          soundGenerator.playActivityAlert(latestEntry.type, latestEntry.priority)
+        }
+      }
+      previousOpsFeedLengthRef.current = opsFeedEntries.length
+    }
+  }, [opsFeedEntries, agentId])
 
   useEffect(() => {
     if (logEntries && logEntries.length === 0) {
