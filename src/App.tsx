@@ -43,6 +43,10 @@ import { RedTeamManagementPanel } from '@/components/RedTeamManagementPanel'
 import { EquipmentInventory, type EquipmentItem } from '@/components/EquipmentInventory'
 import { EquipmentDeploymentDialog } from '@/components/EquipmentDeploymentDialog'
 import { EquipmentMapOverlay } from '@/components/EquipmentMapOverlay'
+import { ArgEventCreator } from '@/components/ArgEventCreator'
+import { ArgEventDashboard } from '@/components/ArgEventDashboard'
+import { DeadDropManager } from '@/components/DeadDropManager'
+import { AgentInventoryViewer } from '@/components/AgentInventoryViewer'
 import { 
   Heart, 
   MapPin, 
@@ -1471,6 +1475,78 @@ function App() {
               onStateChange={async () => {
                 const newState = await gameStateSync.getGameState()
                 setGameState(newState)
+              }}
+            />
+
+            <ArgEventCreator
+              scenarioId={missionData?.name}
+              onEventCreated={(event) => {
+                addLogEntry('mission', 'ARG Event Created', `${event.name} with ${event.items.length} items`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `ARG Event deployed: ${event.name}`,
+                  priority: 'high'
+                })
+              }}
+            />
+
+            <ArgEventDashboard
+              maxHeight="600px"
+              onEventActivated={(event) => {
+                addLogEntry('mission', 'ARG Event Activated', `${event.name} is now live`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `ARG Event activated: ${event.name}`,
+                  priority: 'high'
+                })
+              }}
+            />
+
+            <DeadDropManager
+              assets={allAssets}
+              maxHeight="600px"
+              currentUser={agentCallsign || 'M-CONSOLE'}
+              onDropCreated={(drop) => {
+                addLogEntry('mission', 'Dead Drop Created', `${drop.name} placed at Grid ${String.fromCharCode(65 + drop.gridX)}${drop.gridY + 1}`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Dead drop established: ${drop.name}`,
+                  priority: 'normal'
+                })
+              }}
+              onDropRetrieved={(drop, items) => {
+                addLogEntry('success', 'Dead Drop Retrieved', `${items.length} items collected from ${drop.name}`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Dead drop retrieved: ${drop.name} - ${items.length} items`,
+                  priority: 'normal'
+                })
+              }}
+            />
+
+            <AgentInventoryViewer
+              assets={allAssets}
+              currentAgentId={agentId || 'shadow-7-alpha'}
+              maxHeight="600px"
+              onItemTransferred={(fromAgent, toAgent, itemId) => {
+                const fromAsset = allAssets.find(a => a.agentId === fromAgent)
+                const toAsset = allAssets.find(a => a.agentId === toAgent)
+                addLogEntry('mission', 'Item Transferred', `Item moved from ${fromAsset?.callsign} to ${toAsset?.callsign}`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Item transfer: ${fromAsset?.callsign} → ${toAsset?.callsign}`,
+                  priority: 'normal'
+                })
               }}
             />
 

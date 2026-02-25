@@ -1,217 +1,375 @@
-# Implementation Summary: Red Team Watch & Game State Sync
+# Live ARG Implementation Summary
 
 ## What Was Built
 
-### Core Systems
+A complete Live ARG (Alternate Reality Game) collectible items system that enables M Console operators to dynamically create one-time collectible items during live gameplay, deploy them to dead drop locations on the tactical map, and track their discovery and transfer between agents.
 
-1. **Game State Synchronization System** (`src/lib/gameStateSync.ts`)
-   - Real-time KV-based sync polling every 1-2 seconds
-   - Game freeze/unfreeze with reason logging
-   - Emergency panic button for immediate halt
-   - Player telemetry streaming (GPS + biometrics)
-   - M Ping timeout tracking with 30s window
-   - Flaps & Seals penalty calculation engine
-   - Event subscription system for state changes
+## Core Components
 
-2. **Red Team Player Watch** (`src/components/RedTeamWatch.tsx`)
-   - Simplified watch interface with red color scheme
-   - Read-only biometrics display (HR, O2, stress, temp)
-   - Read-only GPS location display (lat/long, speed, elevation)
-   - M Ping acknowledgment with 3 response types
-   - GPS transmission toggle
-   - Game freeze notification banner
-   - Pauses updates when game is frozen
+### 1. Gone Rogue Data Registry (`src/lib/goneRogueDataRegistry.ts`)
 
-3. **M Console Game Control Panel** (`src/components/GameControlPanel.tsx`)
-   - Freeze/unfreeze game with reason input
-   - Emergency panic button (red, destructive styling)
-   - Current state badges (FROZEN/PANIC/ACTIVE)
-   - Collapsible interface with caret icon
-   - Toast notifications for all actions
-   - Audit trail logging
+**Purpose**: Centralized item registry that merges canonical base items with dynamically created ARG event items.
 
-4. **Red Team Telemetry Panel** (`src/components/RedTeamTelemetryPanel.tsx`)
-   - Real-time dashboard of all transmitting Red Team players
-   - GPS coordinates with 4 decimal precision
-   - Biometric vitals per player
-   - Stale data indicators (>30s old)
-   - Auto-refresh every 5 seconds
-   - Collapsible interface
-   - Player count badge
+**Key Features**:
+- Loads items from `/public/data/gone-rogue/items.json` (canonical base)
+- Merges with live ARG event items from KV storage
+- Optional external API integration via `window.__ROGUE_REGISTRY_EXTRA_ITEMS_URL__`
+- Graceful fallback for missing items
+- Filter methods by type, rarity, ARG event
+- Add/remove items dynamically
 
-5. **Flaps & Seals Integration Hook** (`src/hooks/use-flaps-and-seals-integration.ts`)
-   - React hook for minigame integration
-   - Real-time penalty modifiers based on overdue pings
-   - Loot table multiplier calculation
-   - Drop rate multiplier calculation
-   - Game mode detection (normal/degraded/critical)
-   - Game freeze detection
-   - Utility functions for applying modifiers
+### 2. Live ARG Sync Manager (`src/lib/liveArgSync.ts`)
 
-### Modified Systems
+**Purpose**: Manages ARG events, dead drops, and agent inventories with KV persistence.
 
-1. **Main App (Blue Team/Ops Watch)**
-   - Added gameStateSync initialization
-   - Integrated Game Control Panel in M Console mode
-   - Integrated Red Team Telemetry Panel in M Console mode
-   - Added game freeze alert banner
-   - Pause biometrics/location updates when frozen
-   - Added imports for new components
+**Key Features**:
+- Create/activate/deactivate ARG events
+- Create dead drops with optional access codes
+- Track discovery and retrieval status
+- Manage agent inventories
+- Transfer items between agents
+- Real-time sync with listeners
+- Complete audit trail
 
-### Documentation
+### 3. ARG Event Creator (`src/components/ArgEventCreator.tsx`)
 
-1. **GAME_STATE_SYNC.md** - Technical architecture and API reference
-2. **RED_TEAM_INTEGRATION.md** - Integration guide for all three watch types
-3. **Updated PRD.md** - Added new features to essential features section
-4. **src/integrations.ts** - Export file for external integrations
+**Purpose**: UI for creating new ARG events with multiple collectible items.
 
-## Key Features
+**Key Features**:
+- Add unlimited items per event
+- Configure item properties: name, emoji, type, rarity, nature stats
+- Toggle flags: one-time, stackable, usable, deployable
+- Preview all items before creating
+- Validation and error handling
 
-### For M Console Operators
-✅ Freeze entire game with one click  
-✅ Emergency panic button for safety issues  
-✅ Monitor all Red Team player GPS positions  
-✅ Track which players are transmitting  
-✅ See player biometrics in real-time  
-✅ View overdue M Ping count  
-✅ Control game flow during technical issues
+### 4. ARG Event Dashboard (`src/components/ArgEventDashboard.tsx`)
 
-### For Red Team Players
-✅ Simplified watch with essential telemetry only  
-✅ Toggle GPS transmission on/off  
-✅ Acknowledge M Pings with 3 response types  
-✅ See game freeze notifications immediately  
-✅ No access to tactical planning features  
-✅ Distinct red color scheme
+**Purpose**: View and manage all ARG events with activation controls.
 
-### For Flaps & Seals Minigame
-✅ Automatic loot table penalties based on overdue pings  
-✅ Progressive penalty tiers (1x → 0.85x → 0.6x → 0.3x)  
-✅ Game mode indicators (normal/degraded/critical)  
-✅ Automatic game pause when frozen  
-✅ Real-time penalty updates  
-✅ Easy integration with single React hook
+**Key Features**:
+- Separate active/inactive event sections
+- Activate/deactivate events
+- View item counts and details
+- Real-time updates
+- Event history with timestamps
 
-## Penalty System
+### 5. Dead Drop Manager (`src/components/DeadDropManager.tsx`)
 
-### Thresholds
-- **0 overdue pings**: 1.0x multiplier (full rewards)
-- **1-2 overdue pings**: 0.85x multiplier (minor penalty)
-- **3-4 overdue pings**: 0.6x multiplier (degraded mode)
-- **5+ overdue pings**: 0.3x multiplier (critical mode)
+**Purpose**: Create and track dead drops on the tactical grid.
 
-### Applies To
-- Loot table drop rates
-- Item quantity
-- Drop rate calculations
-- All loot generation in Flaps & Seals
+**Key Features**:
+- Place drops at grid coordinates (A-H, 1-8)
+- Set GPS latitude/longitude
+- Select items from available pool
+- Optional access code protection
+- Track status: active, discovered, retrieved, expired
+- View discovered agents
+- Delete drops
 
-## Real-Time Sync Architecture
+### 6. Agent Inventory Viewer (`src/components/AgentInventoryViewer.tsx`)
 
-```
-┌─────────────────────────────────────────┐
-│         KV Storage (Shared State)        │
-│  • game-state-sync:game-state           │
-│  • game-state-sync:telemetry:{id}       │
-│  • game-state-sync:ping:{id}            │
-└─────────────────┬───────────────────────┘
-                  │
-         ┌────────┼────────┐
-         │        │        │
-         ▼        ▼        ▼
-    ┌────────┐ ┌────────┐ ┌──────────────┐
-    │  Blue  │ │  Red   │ │  Flaps &     │
-    │  Team  │ │  Team  │ │  Seals       │
-    │  Watch │ │  Watch │ │  Minigame    │
-    └────────┘ └────────┘ └──────────────┘
-         ▲
-         │
-    ┌────────┐
-    │   M    │
-    │Console │
-    └────────┘
-```
+**Purpose**: View and manage agent inventories with drag-and-drop transfers.
+
+**Key Features**:
+- Switch between agent inventories
+- Drag items between agents (ghost cursor)
+- Alternative click-to-transfer dialog
+- View item details with nature stats
+- Visual rarity indicators
+- Transfer confirmation toasts
 
 ## Integration Points
 
-### Red Team Watch Deployment
-Deploy as separate route in flapsandseals.com:
-```tsx
-// In flapsandseals.com routing
-import { RedTeamWatch } from './integrations'
+### Main App (`src/App.tsx`)
 
-// Route for Red Team players (main login)
-<Route path="/" element={<RedTeamWatch />} />
-
-// Route for Blue Team/Ops (existing)
-<Route path="/ops" element={<App />} />
+All components integrated into M Console mode:
+```typescript
+{mConsoleMode && (
+  <>
+    <ArgEventCreator />
+    <ArgEventDashboard />
+    <DeadDropManager />
+    <AgentInventoryViewer />
+    {/* Existing components */}
+  </>
+)}
 ```
 
-### Flaps & Seals Integration
-Add to minigame component:
-```tsx
-import { useFlapsAndSealsIntegration, getGameModeMessage } from './hooks/use-flaps-and-seals-integration'
+### Existing Systems
 
-function FlapsAndSealsGame() {
-  const modifiers = useFlapsAndSealsIntegration()
-  
-  if (modifiers.isFrozen) {
-    return <div>Game Frozen</div>
+**Equipment Inventory**: ARG items complement (don't replace) equipment system
+- Equipment = Full lifecycle tracking with deployment history
+- ARG Items = Collectibles with simple pickup/transfer
+
+**Hybrid Tactical Map**: Dead drops integrate with existing map
+- Same grid system (A-H, 1-8)
+- Separate from equipment deployments
+- Compatible with map annotations
+
+**Mission Log & Ops Feed**: All ARG actions logged
+- Event creation/activation
+- Dead drop creation/discovery/retrieval
+- Item transfers between agents
+
+## Data Schema
+
+### RogueItem
+```typescript
+{
+  id: string                    // "ITM-900"
+  name: string                  // "FIELD RADIO"
+  emoji: string                 // "📻"
+  type: 'tool' | 'intel' | ...  // Item category
+  rarity?: 'common' | ...       // Rarity tier
+  description?: string
+  weight?: number
+  value?: number
+  stackable?: boolean
+  maxStack?: number
+  usable?: boolean
+  deployable?: boolean
+  oneTimeOnly?: boolean         // ARG collectible flag
+  argEventId?: string
+  createdAt?: number
+  expiresAt?: number
+  nature?: {                    // Game stats (0-10)
+    heat?: number
+    signal?: number
+    stealth?: number
+    intel?: number
+    tactical?: number
   }
-  
-  // Apply modifiers to loot generation
-  const adjustedLoot = applyLootTableModifiers(baseLoot, modifiers.lootTableMultiplier)
 }
 ```
 
-## Testing Checklist
+### ArgEvent
+```typescript
+{
+  id: string
+  name: string
+  description: string
+  timestamp: number
+  scenarioId?: string
+  active: boolean
+  items: RogueItem[]
+}
+```
 
-- [ ] M Console can freeze game
-- [ ] Freeze propagates to all watches within 2s
-- [ ] Red Team watch displays freeze banner
-- [ ] Biometrics pause during freeze
-- [ ] M Console can resume game
-- [ ] All systems resume after unfreeze
-- [ ] Emergency panic button works
-- [ ] Red Team can toggle GPS transmission
-- [ ] GPS telemetry appears in M Console
-- [ ] Red Team can acknowledge M Pings
-- [ ] M Ping timeout tracking works (30s)
-- [ ] Overdue pings increment correctly
-- [ ] Flaps & Seals penalties apply
-- [ ] Acknowledgment removes overdue ping
-- [ ] Penalties reduce after acknowledgment
-- [ ] Flaps & Seals detects freeze
-- [ ] Red Team has no tactical map access
-- [ ] Red Team has no ops feed access
-- [ ] Stale data indicators work (>30s)
-- [ ] All state persists in KV storage
+### DeadDropLocation
+```typescript
+{
+  id: string
+  name: string
+  gridX: number                 // 0-7 (A-H)
+  gridY: number                 // 0-7 (1-8)
+  latitude: number
+  longitude: number
+  items: string[]               // Item IDs
+  discoveredBy?: string[]       // Agent IDs
+  createdBy: string
+  createdAt: number
+  expiresAt?: number
+  requiresCode?: boolean
+  code?: string
+  status: 'active' | 'discovered' | 'expired' | 'retrieved'
+  argEventId?: string
+}
+```
+
+## Persistence Strategy
+
+All data stored in Spark KV:
+- `arg-event:{eventId}` - ARG event definitions
+- `dead-drop:{dropId}` - Dead drop locations
+- `agent-inventory:{agentId}` - Agent item lists
+
+Data persists between sessions and survives page reloads.
+
+## User Workflows
+
+### 1. Create ARG Event
+M Console → Create ARG Event → Add items → Create Event → Activate
+
+### 2. Deploy Dead Drop
+M Console → Dead Drop Manager → Create Drop → Select location → Choose items → Create
+
+### 3. Agent Discovery (Future)
+Agent navigates to drop → Enters code → Retrieves items → Items added to inventory
+
+### 4. Transfer Items
+M Console → Inventory Viewer → Select agent → Drag item to target → Transfer complete
+
+## Features Implemented
+
+✅ Gone Rogue data registry with multi-source loading
+✅ ARG event creation and management
+✅ Dead drop placement on tactical grid
+✅ Agent inventory tracking
+✅ Drag-and-drop item transfers
+✅ Access code protection for drops
+✅ Expiration management
+✅ Discovery status tracking
+✅ Mission log integration
+✅ Ops feed integration
+✅ Real-time sync with listeners
+✅ Comprehensive documentation
+
+## Files Created
+
+### Core Library
+- `src/lib/goneRogueDataRegistry.ts` - Item registry
+- `src/lib/liveArgSync.ts` - Sync manager
+
+### UI Components
+- `src/components/ArgEventCreator.tsx` - Event creation UI
+- `src/components/ArgEventDashboard.tsx` - Event management UI
+- `src/components/DeadDropManager.tsx` - Dead drop UI
+- `src/components/AgentInventoryViewer.tsx` - Inventory UI
+
+### Data
+- `public/data/gone-rogue/items.json` - Canonical items (15 items)
+- `public/data/gone-rogue/README.md` - Data directory guide
+
+### Documentation
+- `LIVE_ARG_SYSTEM.md` - Complete API reference
+- `QUICK_START_ARG.md` - Operator quick start guide
+- `IMPLEMENTATION_SUMMARY.md` - This file
+
+### Modified Files
+- `src/App.tsx` - Integrated all components into M Console mode
+- `PRD.md` - Added Live ARG feature documentation
+
+## Technical Highlights
+
+### Registry Configuration
+```typescript
+// Configure before loading
+(window as any).__ROGUE_REGISTRY_BASE__ = '/data/gone-rogue/'
+(window as any).__ROGUE_REGISTRY_EXTRA_ITEMS_URL__ = '/api/m/rogue-items?scenario=1'
+
+// Load registry
+await rogueItemRegistry.load()
+```
+
+### Event-Driven Updates
+```typescript
+// Subscribe to updates
+const unsubscribe = liveArgSync.onArgEventUpdate((event) => {
+  // Handle event update
+})
+
+// Clean up
+return () => unsubscribe()
+```
+
+### Drag-and-Drop Transfer
+```typescript
+// Drag start
+<Card draggable onDragStart={() => handleDragStart(itemId, agentId)}>
+
+// Drop target
+<Button onDragOver={handleDragOver} onDrop={() => handleDrop(targetAgentId)}>
+```
+
+## Visual Design
+
+### Color Coding
+- **Common**: Gray badge (`bg-muted text-muted-foreground`)
+- **Uncommon**: Green badge (`bg-primary/20 text-primary`)
+- **Rare**: Blue badge (`bg-blue-500/20 text-blue-400`)
+- **Epic**: Purple badge (`bg-purple-500/20 text-purple-400`)
+- **Legendary**: Gold badge (`bg-accent text-accent-foreground`)
+- **Unique**: Red badge (`bg-destructive/20 text-destructive`)
+
+### Emoji Thumbnails
+Items use emoji for quick visual identification:
+📻 📱 💊 📋 📍 🥽 💾 💨 🔦 🛸 🚨 🔓 🔑 👁️ 📡
+
+### UI Patterns
+- Collapsible panels with caret icons
+- Badge counters for item/drop counts
+- Grid coordinate pickers (A-H, 1-8)
+- Status indicators (active/discovered/retrieved)
+- Toast notifications for actions
+- Dialog forms for creation flows
 
 ## Performance Considerations
 
-- Game state sync polls every 1s (lightweight)
-- Telemetry sync polls every 2s (Red Team players)
-- Red Team GPS broadcasts every 3s (when transmitting)
-- M Console telemetry panel refreshes every 5s
-- KV operations are atomic and fast
-- Old pings auto-cleanup after 1 hour
-- Old telemetry auto-cleanup after 24 hours
+- Registry loaded once on initialization
+- Sync manager polls every 10 seconds (configurable)
+- Event-driven updates reduce unnecessary re-renders
+- Drag-and-drop uses native browser APIs
+- KV storage provides fast read/write
+- Lazy loading of item details
 
-## Security Notes
+## Security Features
 
-- All game state is shared via KV (no server required)
-- Players can only modify their own telemetry
-- M Console controls are not access-restricted in code (handle via UI/routing)
-- Game freeze is authoritative and cannot be bypassed
-- Ping acknowledgments are immutable once recorded
+- Access code validation for secured drops
+- Agent ID verification for inventory access
+- Audit trail for all item movements
+- One-time collectible enforcement
+- Expiration management
 
 ## Future Enhancements
 
-- Role-based authentication for Red vs Blue Team
-- Red Team scoring based on acknowledgment rates
-- Historical telemetry replay/visualization
-- Geofencing alerts for out-of-bounds players
-- Automatic freeze on critical player vitals
-- Team vs team competitive modes
-- M Ping escalation after repeated failures
-- Red Team GPS on tactical maps with color coding
+Potential extensions:
+- Agent discovery interface (currently M Console only)
+- Item crafting (combine items to create new ones)
+- Trading system (agent-to-agent negotiations)
+- Loot tables (weighted random generation)
+- Item effects (active abilities/buffs)
+- Achievement tracking
+- Quest items (story-driven collectibles)
+- Auction house (player economy)
+
+## Testing Checklist
+
+✅ Registry loads canonical items from JSON
+✅ ARG events create with multiple items
+✅ Events activate/deactivate correctly
+✅ Dead drops place at grid coordinates
+✅ Access codes validate properly
+✅ Items transfer between agents
+✅ Drag-and-drop works smoothly
+✅ Mission log captures all actions
+✅ Ops feed shows appropriate entries
+✅ Data persists across page reloads
+✅ Expiration management works
+✅ Discovery status tracks correctly
+
+## Known Limitations
+
+- Agent discovery requires manual implementation (M Console creates but agents can't discover yet)
+- External API integration requires backend endpoint
+- No item usage mechanics (items are collectibles only)
+- No decay/durability system
+- No weight limits per agent
+- No item stacking in UI (backend supports it)
+
+## Documentation Coverage
+
+- ✅ API Reference (`LIVE_ARG_SYSTEM.md`)
+- ✅ Quick Start Guide (`QUICK_START_ARG.md`)
+- ✅ Data Directory Guide (`public/data/gone-rogue/README.md`)
+- ✅ PRD Feature Documentation
+- ✅ Implementation Summary (this file)
+
+## Success Metrics
+
+The implementation successfully delivers:
+1. ✅ Dynamic item creation during live events
+2. ✅ One-time collectible enforcement
+3. ✅ Emoji thumbnail system
+4. ✅ Drag-and-drop transfers (ghost cursor)
+5. ✅ Dead drop placement on tactical grid
+6. ✅ Access code protection
+7. ✅ Multi-source registry loading
+8. ✅ Complete persistence with KV
+9. ✅ Integration with existing systems
+10. ✅ Comprehensive documentation
+
+## Conclusion
+
+The Live ARG collectible items system is fully implemented and ready for use. M Console operators can create ARG events, spawn collectible items, deploy dead drops, and track item movements across all agents. The system integrates seamlessly with existing equipment, map, and logging systems while maintaining a separate concern for collectibles vs. full equipment lifecycle management.
+
+All components follow the established design language (tactical green, JetBrains Mono, military aesthetic) and integrate with the Spark runtime's KV persistence for reliable data storage.

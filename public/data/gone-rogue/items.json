@@ -1,0 +1,249 @@
+[
+  {
+    "id": "ITM-001",
+    "name": "TACTICAL RADIO",
+    "emoji": "📻",
+    "type": "tool",
+    "rarity": "uncommon",
+    "description": "Encrypted field radio for secure communications",
+    "weight": 2.5,
+    "value": 250,
+    "stackable": false,
+    "usable": true,
+    "deployable": false,
+    "nature": {
+      "signal": 5,
+      "heat": 2
+    }
+  },
+  {
+    "id": "ITM-002",
+    "name": "CIPHER KEY",
+    "emoji": "🔑",
+    "type": "key",
+    "rarity": "rare",
+    "description": "Unlock encrypted intelligence files",
+    "weight": 0.1,
+    "value": 500,
+    "stackable": false,
+    "usable": true,
+    "nature": {
+      "intel": 8
+    }
+  },
+  {
+    "id": "ITM-003",
+    "name": "FIELD MEDKIT",
+    "emoji": "💊",
+    "type": "consumable",
+    "rarity": "common",
+    "description": "Emergency medical supplies",
+    "weight": 1.5,
+    "value": 100,
+    "stackable": true,
+    "maxStack": 3,
+    "usable": true,
+    "nature": {
+      "tactical": 3
+    }
+  },
+  {
+    "id": "ITM-004",
+    "name": "CLASSIFIED DOCUMENTS",
+    "emoji": "📋",
+    "type": "intel",
+    "rarity": "rare",
+    "description": "Top secret mission briefings",
+    "weight": 0.5,
+    "value": 750,
+    "stackable": false,
+    "usable": true,
+    "nature": {
+      "intel": 10,
+      "heat": 5
+    }
+  },
+  {
+    "id": "ITM-005",
+    "name": "GPS TRACKER",
+    "emoji": "📍",
+    "type": "equipment",
+    "rarity": "uncommon",
+    "description": "Compact GPS tracking device",
+    "weight": 0.3,
+    "value": 200,
+    "stackable": true,
+    "maxStack": 5,
+    "deployable": true,
+    "nature": {
+      "signal": 4,
+      "tactical": 3
+    }
+  },
+  {
+    "id": "ITM-006",
+    "name": "NIGHT VISION GOGGLES",
+    "emoji": "🥽",
+    "type": "equipment",
+    "rarity": "epic",
+    "description": "Advanced night vision optics",
+    "weight": 1.2,
+    "value": 1000,
+    "stackable": false,
+    "usable": true,
+    "nature": {
+      "stealth": 6,
+      "tactical": 5
+    }
+  },
+  {
+    "id": "ITM-007",
+    "name": "ENCRYPTED USB",
+    "emoji": "💾",
+    "type": "intel",
+    "rarity": "rare",
+    "description": "Contains sensitive operational data",
+    "weight": 0.1,
+    "value": 600,
+    "stackable": true,
+    "maxStack": 3,
+    "usable": true,
+    "nature": {
+      "intel": 7,
+      "heat": 3
+    }
+  },
+  {
+    "id": "ITM-008",
+    "name": "SMOKE GRENADE",
+    "emoji": "💨",
+    "type": "equipment",
+    "rarity": "uncommon",
+    "description": "Tactical smoke deployment",
+    "weight": 0.8,
+    "value": 150,
+    "stackable": true,
+    "maxStack": 3,
+    "usable": true,
+    "deployable": true,
+    "nature": {
+      "stealth": 5,
+      "tactical": 4
+    }
+  },
+  {
+    "id": "ITM-009",
+    "name": "BIOMETRIC SCANNER",
+    "emoji": "👁️",
+    "type": "tool",
+    "rarity": "epic",
+    "description": "Fingerprint and retinal scanner",
+    "weight": 0.6,
+    "value": 900,
+    "stackable": false,
+    "usable": true,
+    "nature": {
+      "intel": 6,
+      "tactical": 5
+    }
+  },
+  {
+    "id": "ITM-010",
+    "name": "EVIDENCE PHOTOS",
+    "emoji": "📷",
+    "type": "evidence",
+    "rarity": "uncommon",
+    "description": "Photographic evidence of target activities",
+    "weight": 0.2,
+    "value": 300,
+    "stackable": true,
+    "maxStack": 10,
+    "usable": true,
+    "nature": {
+      "intel": 5
+    }
+  },
+  {
+    "id": "ITM-011",
+    "name": "SIGNAL JAMMER",
+    "emoji": "📡",
+    "type": "equipment",
+    "rarity": "epic",
+    "description": "Disrupts electronic communications",
+    "weight": 2.0,
+    "value": 1200,
+    "stackable": false,
+    "usable": true,
+    "deployable": true,
+    "nature": {
+      "signal": 8,
+      "tactical": 6
+    }
+  },
+  {
+    "id": "ITM-012",
+    "name": "LOCK PICK SET",
+    "emoji": "🔓",
+    "type": "tool",
+    "rarity": "uncommon",
+    "description": "Professional lockpicking tools",
+    "weight": 0.4,
+    "value": 200,
+    "stackable": false,
+    "usable": true,
+    "nature": {
+      "stealth": 4,
+      "tactical": 3
+    }
+  },
+  {
+    "id": "ITM-013",
+    "name": "TACTICAL FLASHLIGHT",
+    "emoji": "🔦",
+    "type": "equipment",
+    "rarity": "common",
+    "description": "High-intensity LED flashlight",
+    "weight": 0.5,
+    "value": 80,
+    "stackable": false,
+    "usable": true,
+    "nature": {
+      "tactical": 2
+    }
+  },
+  {
+    "id": "ITM-014",
+    "name": "RECON DRONE",
+    "emoji": "🛸",
+    "type": "equipment",
+    "rarity": "legendary",
+    "description": "Miniature surveillance drone",
+    "weight": 1.5,
+    "value": 2000,
+    "stackable": false,
+    "usable": true,
+    "deployable": true,
+    "nature": {
+      "intel": 9,
+      "signal": 7,
+      "tactical": 8
+    }
+  },
+  {
+    "id": "ITM-015",
+    "name": "EMERGENCY BEACON",
+    "emoji": "🚨",
+    "type": "equipment",
+    "rarity": "rare",
+    "description": "SOS distress beacon",
+    "weight": 0.3,
+    "value": 400,
+    "stackable": false,
+    "usable": true,
+    "deployable": true,
+    "nature": {
+      "signal": 9,
+      "heat": 8
+    }
+  }
+]
