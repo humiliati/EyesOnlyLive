@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
 import { 
   Play, 
   Pause, 
@@ -16,7 +17,10 @@ import {
   MapPin,
   ArrowsOut,
   ArrowsIn,
-  X
+  X,
+  DotsSixVertical,
+  UploadSimple,
+  SortAscending
 } from '@phosphor-icons/react'
 import { type RealWorldItem } from '@/components/RealWorldItemCrafter'
 import { toast } from 'sonner'
@@ -24,7 +28,7 @@ import { toast } from 'sonner'
 export interface DebriefEntry {
   id: string
   timestamp: number
-  type: 'item-crafted' | 'item-deployed' | 'item-retrieved' | 'business-participation' | 'photo-added'
+  type: 'item-crafted' | 'item-deployed' | 'item-retrieved' | 'business-participation' | 'photo-added' | 'm-video' | 'scripted-event'
   title: string
   description?: string
   realWorldItem?: RealWorldItem
@@ -32,22 +36,32 @@ export interface DebriefEntry {
   businessName?: string
   ownerName?: string
   gridLocation?: string
+  sortOrder?: number
+  source?: 'm-console' | 'scripted' | 'field'
+  priority?: 'low' | 'normal' | 'high' | 'critical'
 }
 
 interface DebriefMediaFeedProps {
   maxHeight?: string
   autoPlayVideos?: boolean
+  allowUpload?: boolean
+  allowSort?: boolean
 }
 
 export function DebriefMediaFeed({ 
   maxHeight = '600px',
-  autoPlayVideos = false
+  autoPlayVideos = false,
+  allowUpload = false,
+  allowSort = false
 }: DebriefMediaFeedProps) {
   const [entries, setEntries] = useKV<DebriefEntry[]>('debrief-entries', [])
   const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isStretchMode, setIsStretchMode] = useState(false)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [showUploadPortal, setShowUploadPortal] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handlePlayPause = () => {
     if (videoRef.current) {
@@ -85,9 +99,13 @@ export function DebriefMediaFeed({
     const newEntry: DebriefEntry = {
       id: `DBF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
       timestamp: Date.now(),
+      sortOrder: 0,
       ...entry
     }
-    setEntries((current) => [newEntry, ...(current || [])])
+    setEntries((current) => {
+      const updated = [newEntry, ...(current || [])]
+      return updated.map((e, idx) => ({ ...e, sortOrder: idx }))
+    })
   }
 
   useEffect(() => {
@@ -112,17 +130,104 @@ export function DebriefMediaFeed({
     }
   }
 
+  const handleDragStart = (index: number) => {
+    if (!allowSort) return
+    setDraggedIndex(index)
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    if (!allowSort) return
+    e.preventDefault()
+  }
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    if (!allowSort || draggedIndex === null) return
+    e.preventDefault()
+
+    setEntries((current) => {
+      if (!current) return []
+      const items = [...current]
+      const draggedItem = items[draggedIndex]
+      items.splice(draggedIndex, 1)
+      items.splice(dropIndex, 0, draggedItem)
+      return items.map((e, idx) => ({ ...e, sortOrder: idx }))
+    })
+
+    setDraggedIndex(null)
+    toast.success('Entry reordered')
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+  }
+
+  const handleSortByTime = (direction: 'asc' | 'desc') => {
+    setEntries((current) => {
+      if (!current) return []
+      const sorted = [...current].sort((a, b) => {
+        return direction === 'asc' 
+          ? a.timestamp - b.timestamp 
+          : b.timestamp - a.timestamp
+      })
+      return sorted.map((e, idx) => ({ ...e, sortOrder: idx }))
+    })
+    toast.success(`Sorted by time (${direction === 'asc' ? 'oldest first' : 'newest first'})`)
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    const reader = new FileReader()
+
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      if (!dataUrl) return
+
+      const mediaType = file.type.startsWith('video/') ? 'video' : 'image'
+      
+      addDebriefEntry({
+        type: 'm-video',
+        title: file.name,
+        description: `Uploaded ${mediaType} from M-Console`,
+        mediaUrls: [dataUrl],
+        source: 'm-console',
+        priority: 'normal'
+      })
+
+      toast.success(`${mediaType} uploaded successfully`)
+      setShowUploadPortal(false)
+    }
+
+    reader.readAsDataURL(file)
+  }
+
   const getTypeBadge = (type: DebriefEntry['type']) => {
     const badges = {
       'item-crafted': { label: 'Crafted', variant: 'secondary' as const },
       'item-deployed': { label: 'Deployed', variant: 'default' as const },
       'item-retrieved': { label: 'Retrieved', variant: 'outline' as const },
       'business-participation': { label: 'Business', variant: 'default' as const },
-      'photo-added': { label: 'Photo', variant: 'secondary' as const }
+      'photo-added': { label: 'Photo', variant: 'secondary' as const },
+      'm-video': { label: 'M-Video', variant: 'default' as const },
+      'scripted-event': { label: 'Event', variant: 'outline' as const }
     }
     const badge = badges[type]
     return <Badge variant={badge.variant} className="text-[9px] px-1.5 py-0">{badge.label}</Badge>
   }
+
+  const getPriorityIndicator = (priority?: string) => {
+    if (!priority || priority === 'normal') return null
+    const colors = {
+      low: 'text-muted-foreground',
+      high: 'text-accent',
+      critical: 'text-destructive'
+    }
+    return <Badge variant="outline" className={`text-[8px] px-1 py-0 ${colors[priority as keyof typeof colors]}`}>{priority.toUpperCase()}</Badge>
+  }
+
+  const sortedEntries = entries ? [...entries].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)) : []
 
   return (
     <Card className="border-primary/30 p-4">
@@ -130,11 +235,50 @@ export function DebriefMediaFeed({
         <div className="flex items-center gap-2">
           <VideoCamera weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Debrief Feed</span>
+          {allowSort && (
+            <Badge variant="outline" className="text-[8px] px-1 py-0 text-accent">
+              <DotsSixVertical weight="bold" size={10} className="mr-0.5" />
+              SORTABLE
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-[9px] px-2 py-0">
             {entries?.length || 0} Entries
           </Badge>
+          {allowUpload && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowUploadPortal(!showUploadPortal)}
+              className="h-6 text-[9px] px-2"
+            >
+              <UploadSimple weight="bold" size={12} className="mr-1" />
+              Upload
+            </Button>
+          )}
+          {allowSort && entries && entries.length > 0 && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleSortByTime('desc')}
+                className="h-6 text-[9px] px-2"
+                title="Sort newest first"
+              >
+                <SortAscending weight="bold" size={12} />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleSortByTime('asc')}
+                className="h-6 text-[9px] px-2"
+                title="Sort oldest first"
+              >
+                <SortAscending weight="bold" size={12} className="rotate-180" />
+              </Button>
+            </>
+          )}
           {entries && entries.length > 0 && (
             <Button
               size="sm"
@@ -149,6 +293,47 @@ export function DebriefMediaFeed({
       </div>
 
       <Separator className="mb-4" />
+
+      {showUploadPortal && allowUpload && (
+        <Card className="border-accent bg-accent/10 mb-4 p-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UploadSimple weight="bold" className="text-accent" size={16} />
+                <span className="text-xs tracking-[0.08em] uppercase">Upload Portal</span>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowUploadPortal(false)}
+                className="h-6 w-6 p-0"
+              >
+                <X weight="bold" size={12} />
+              </Button>
+            </div>
+            
+            <Separator />
+            
+            <div className="space-y-2">
+              <div className="text-[10px] text-muted-foreground">
+                Upload videos or images for M-Console broadcasts and scripted thematic events
+              </div>
+              
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept="video/*,image/*"
+                onChange={handleFileUpload}
+                className="text-xs cursor-pointer"
+              />
+              
+              <div className="text-[9px] text-muted-foreground bg-muted p-2 rounded">
+                💡 Supported formats: MP4, WebM, MOV, JPG, PNG, GIF
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {selectedMedia && (
         <Card className="border-accent bg-card/95 mb-4 overflow-hidden">
@@ -246,28 +431,54 @@ export function DebriefMediaFeed({
         </Card>
       )}
 
-      <ScrollArea style={{ maxHeight: selectedMedia ? `calc(${maxHeight} - 300px)` : maxHeight }}>
+      <ScrollArea style={{ maxHeight: selectedMedia ? `calc(${maxHeight} - 300px)` : showUploadPortal ? `calc(${maxHeight} - 200px)` : maxHeight }}>
         <div className="space-y-3 pr-2">
           {(!entries || entries.length === 0) && (
             <div className="text-center text-xs text-muted-foreground py-8">
               No debrief entries yet
+              {allowUpload && <div className="mt-2">Click Upload to add media</div>}
             </div>
           )}
 
-          {entries?.map((entry) => (
-            <Card key={entry.id} className="border-border p-3 space-y-2">
+          {sortedEntries.map((entry, index) => (
+            <Card 
+              key={entry.id} 
+              draggable={allowSort}
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              className={`border-border p-3 space-y-2 transition-all ${
+                allowSort ? 'cursor-move hover:border-primary' : ''
+              } ${draggedIndex === index ? 'opacity-50' : ''}`}
+            >
               <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    {getTypeBadge(entry.type)}
-                    <div className="text-[9px] text-muted-foreground tabular-nums">
-                      {new Date(entry.timestamp).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="font-bold text-sm">{entry.title}</div>
-                  {entry.description && (
-                    <div className="text-xs text-muted-foreground mt-1">{entry.description}</div>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {allowSort && (
+                    <DotsSixVertical 
+                      weight="bold" 
+                      className="text-muted-foreground flex-shrink-0" 
+                      size={16}
+                    />
                   )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      {getTypeBadge(entry.type)}
+                      {getPriorityIndicator(entry.priority)}
+                      {entry.source && (
+                        <Badge variant="outline" className="text-[8px] px-1 py-0">
+                          {entry.source === 'm-console' ? 'M' : entry.source === 'scripted' ? 'SCRIPT' : 'FIELD'}
+                        </Badge>
+                      )}
+                      <div className="text-[9px] text-muted-foreground tabular-nums">
+                        {new Date(entry.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="font-bold text-sm">{entry.title}</div>
+                    {entry.description && (
+                      <div className="text-xs text-muted-foreground mt-1">{entry.description}</div>
+                    )}
+                  </div>
                 </div>
                 <Button
                   size="sm"

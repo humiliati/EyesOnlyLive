@@ -49,6 +49,7 @@ import { DeadDropManager } from '@/components/DeadDropManager'
 import { AgentInventoryViewer } from '@/components/AgentInventoryViewer'
 import { RealWorldItemCrafter } from '@/components/RealWorldItemCrafter'
 import { DebriefMediaFeed, addDebriefEntryFromWindow } from '@/components/DebriefMediaFeed'
+import { DebriefBroadcaster } from '@/components/DebriefBroadcaster'
 import { BusinessPartnershipSummary } from '@/components/BusinessPartnershipSummary'
 import { BusinessPartnershipDirectory } from '@/components/BusinessPartnershipDirectory'
 import { BusinessMapOverlay } from '@/components/BusinessMapOverlay'
@@ -1644,9 +1645,24 @@ function App() {
               }}
             />
 
+            <DebriefBroadcaster
+              onBroadcastSent={(broadcast) => {
+                addLogEntry('transmission', 'Debrief Broadcast Sent', `${broadcast.title} - ${broadcast.priority?.toUpperCase() || 'NORMAL'} priority`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'transmission',
+                  message: `Debrief broadcast: ${broadcast.title}`,
+                  priority: broadcast.priority === 'critical' ? 'critical' : broadcast.priority === 'high' ? 'high' : 'normal'
+                })
+              }}
+            />
+
             <DebriefMediaFeed
               maxHeight="600px"
               autoPlayVideos={false}
+              allowUpload={true}
+              allowSort={true}
             />
 
             <ArgEventCreator
