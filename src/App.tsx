@@ -22,6 +22,7 @@ import { HybridTacticalMap, type MapAnnotation } from '@/components/HybridTactic
 import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
 import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { BroadcastScheduler } from '@/components/BroadcastScheduler'
+import { AnnotationBroadcaster } from '@/components/AnnotationBroadcaster'
 import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
 import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
 import { soundGenerator } from '@/lib/sounds'
@@ -365,7 +366,7 @@ function App() {
     setMissionWaypoints((current) => [...(current || []), ...waypoints])
   }, [setMissionWaypoints])
 
-  const handleCreateAnnotation = useCallback((annotation: Omit<MapAnnotation, 'id' | 'createdAt'>) => {
+  const handleCreateAnnotation = useCallback(async (annotation: Omit<MapAnnotation, 'id' | 'createdAt'>) => {
     const newAnnotation: MapAnnotation = {
       ...annotation,
       id: `ann-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -380,12 +381,16 @@ function App() {
       message: `Map annotation: ${annotation.label}`,
       priority: 'normal'
     })
+
+    await mConsoleSync.broadcastAnnotation('create', newAnnotation, undefined, agentCallsign || 'SHADOW-7')
   }, [setMapAnnotations, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
 
-  const handleDeleteAnnotation = useCallback((annotationId: string) => {
+  const handleDeleteAnnotation = useCallback(async (annotationId: string) => {
     setMapAnnotations((current) => (current || []).filter(a => a.id !== annotationId))
     addLogEntry('info', 'Annotation Deleted', 'Map marking removed')
-  }, [setMapAnnotations, addLogEntry])
+
+    await mConsoleSync.broadcastAnnotation('delete', undefined, annotationId, agentCallsign || 'SHADOW-7')
+  }, [setMapAnnotations, addLogEntry, agentCallsign])
 
   const handleBroadcastAcknowledge = useCallback(async (
     broadcastId: string, 
@@ -592,6 +597,42 @@ function App() {
         })
         
         soundGenerator.playActivityAlert('mission', deployment.priority)
+        break
+      }
+
+      case 'annotation-update': {
+        const annotationBroadcast = broadcast.payload as import('@/lib/mConsoleSync').AnnotationBroadcast
+        
+        if (annotationBroadcast.action === 'create' && annotationBroadcast.annotation) {
+          setMapAnnotations((current) => {
+            const exists = (current || []).find(a => a.id === annotationBroadcast.annotation!.id)
+            if (exists) return current || []
+            return [...(current || []), annotationBroadcast.annotation!]
+          })
+          
+          addLogEntry('info', 'Map Annotation Received', `${annotationBroadcast.annotation.label} added by ${broadcast.broadcastBy}`)
+          addOpsFeedEntry({
+            agentCallsign: broadcast.broadcastBy,
+            agentId: 'M-CONSOLE',
+            type: 'mission',
+            message: `Map marked: ${annotationBroadcast.annotation.label}`,
+            priority: 'normal'
+          })
+        } else if (annotationBroadcast.action === 'delete' && annotationBroadcast.annotationId) {
+          setMapAnnotations((current) => 
+            (current || []).filter(a => a.id !== annotationBroadcast.annotationId)
+          )
+          
+          addLogEntry('info', 'Map Annotation Removed', `Marking removed by ${broadcast.broadcastBy}`)
+        } else if (annotationBroadcast.action === 'update' && annotationBroadcast.annotation) {
+          setMapAnnotations((current) => 
+            (current || []).map(a => 
+              a.id === annotationBroadcast.annotation!.id ? annotationBroadcast.annotation! : a
+            )
+          )
+          
+          addLogEntry('info', 'Map Annotation Updated', `${annotationBroadcast.annotation.label} updated by ${broadcast.broadcastBy}`)
+        }
         break
       }
     }
@@ -1094,6 +1135,13 @@ function App() {
               onBroadcastSent={(templateId, targetAgents) => {
                 addLogEntry('transmission', 'Broadcast Sent', `Template broadcast sent to ${targetAgents.length} agent(s)`)
               }}
+            />
+
+            <AnnotationBroadcaster
+              annotations={mapAnnotations || []}
+              onDeleteAnnotation={handleDeleteAnnotation}
+              onCreateAnnotation={handleCreateAnnotation}
+              currentUser="M-CONSOLE"
             />
           </>
         )}

@@ -26,7 +26,7 @@ export interface BroadcastAcknowledgment {
 
 export interface TrackedBroadcast {
   id: string
-  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'general' | 'patrol-route-deploy'
+  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'general' | 'patrol-route-deploy' | 'annotation-update'
   message: string
   priority: 'low' | 'normal' | 'high' | 'critical'
   issuedBy: string

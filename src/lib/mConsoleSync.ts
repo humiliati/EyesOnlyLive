@@ -1,6 +1,7 @@
 import type { AssetLocation, ActiveLane } from '@/components/GlobalAssetMap'
 import type { OpsFeedEntry } from '@/components/OperationsFeed'
 import type { PatrolRoute } from '@/components/PatrolRouteTemplates'
+import type { MapAnnotation } from '@/components/HybridTacticalMap'
 
 export interface ScenarioDeployment {
   id: string
@@ -25,6 +26,14 @@ export interface PatrolRouteDeployment {
   deployedBy: string
   startTime?: number
   priority: 'low' | 'normal' | 'high' | 'critical'
+}
+
+export interface AnnotationBroadcast {
+  action: 'create' | 'update' | 'delete'
+  annotation?: MapAnnotation
+  annotationId?: string
+  timestamp: number
+  broadcastBy: string
 }
 
 export interface LaneUpdate {
@@ -56,7 +65,7 @@ export interface BroadcastAcknowledgment {
 
 export interface MConsoleBroadcast {
   id: string
-  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'ops-update' | 'general' | 'patrol-route-deploy'
+  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'ops-update' | 'general' | 'patrol-route-deploy' | 'annotation-update'
   payload: any
   timestamp: number
   broadcastBy: string
@@ -334,6 +343,30 @@ class MConsoleSync {
     for (const key of ackKeys) {
       await window.spark.kv.delete(key)
     }
+  }
+
+  async broadcastAnnotation(
+    action: 'create' | 'update' | 'delete',
+    annotation: MapAnnotation | undefined,
+    annotationId: string | undefined,
+    broadcastBy: string
+  ): Promise<void> {
+    const broadcast: AnnotationBroadcast = {
+      action,
+      annotation,
+      annotationId,
+      timestamp: Date.now(),
+      broadcastBy
+    }
+    await this.publishBroadcast('annotation-update', broadcast, broadcastBy)
+  }
+
+  async getSharedAnnotations(): Promise<MapAnnotation[]> {
+    return await window.spark.kv.get<MapAnnotation[]>(`${this.kvPrefix}:shared-annotations`) || []
+  }
+
+  async setSharedAnnotations(annotations: MapAnnotation[]): Promise<void> {
+    await window.spark.kv.set(`${this.kvPrefix}:shared-annotations`, annotations)
   }
 }
 
