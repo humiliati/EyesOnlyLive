@@ -55,7 +55,8 @@ import {
   CheckSquare,
   Square,
   NotePencil,
-  Note
+  Note,
+  FileText
 } from '@phosphor-icons/react'
 
 export interface EnhancedLogEntry extends LogEntry {
@@ -75,6 +76,137 @@ interface HistoricalLogViewerProps {
 type FilterType = 'all' | 'archived' | LogEntry['type']
 type TimeRange = 'all' | '1h' | '6h' | '24h' | '7d'
 
+interface AnnotationTemplate {
+  id: string
+  name: string
+  icon: string
+  description: string
+  template: (entry: EnhancedLogEntry) => string
+}
+
+const ANNOTATION_TEMPLATES: AnnotationTemplate[] = [
+  {
+    id: 'situation-report',
+    name: 'SITREP',
+    icon: '📋',
+    description: 'Situation Report',
+    template: (entry) => `[SITREP - ${new Date().toLocaleTimeString()}]
+STATUS: 
+ANALYSIS: 
+RECOMMENDATION: 
+FOLLOW-UP REQUIRED: [ ] YES  [ ] NO`
+  },
+  {
+    id: 'threat-assessment',
+    name: 'THREAT',
+    icon: '⚠️',
+    description: 'Threat Assessment',
+    template: (entry) => `[THREAT ASSESSMENT]
+THREAT LEVEL: 
+NATURE OF THREAT: 
+PROXIMITY: 
+IMMEDIATE ACTION: 
+ESCALATION: [ ] YES  [ ] NO`
+  },
+  {
+    id: 'intel-brief',
+    name: 'INTEL',
+    icon: '🔍',
+    description: 'Intelligence Brief',
+    template: (entry) => `[INTELLIGENCE BRIEF]
+SOURCE: 
+RELIABILITY: 
+INFORMATION: 
+VERIFICATION STATUS: 
+ACTIONABLE: [ ] YES  [ ] NO`
+  },
+  {
+    id: 'comms-log',
+    name: 'COMMS',
+    icon: '📡',
+    description: 'Communication Log',
+    template: (entry) => `[COMMS LOG]
+FROM: 
+TO: 
+CHANNEL: 
+MESSAGE SUMMARY: 
+RESPONSE REQUIRED: [ ] YES  [ ] NO`
+  },
+  {
+    id: 'medical',
+    name: 'MEDICAL',
+    icon: '⚕️',
+    description: 'Medical Note',
+    template: (entry) => `[MEDICAL LOG]
+SUBJECT: 
+CONDITION: 
+VITALS: 
+TREATMENT: 
+EVACUATION NEEDED: [ ] YES  [ ] NO`
+  },
+  {
+    id: 'tactical',
+    name: 'TACTICAL',
+    icon: '🎯',
+    description: 'Tactical Decision',
+    template: (entry) => `[TACTICAL DECISION]
+DECISION: 
+RATIONALE: 
+RISK ASSESSMENT: 
+ALTERNATIVES CONSIDERED: 
+OUTCOME: `
+  },
+  {
+    id: 'asset-status',
+    name: 'ASSET',
+    icon: '📦',
+    description: 'Asset/Resource Status',
+    template: (entry) => `[ASSET STATUS]
+ASSET ID: 
+TYPE: 
+CONDITION: 
+LOCATION: 
+NOTES: `
+  },
+  {
+    id: 'checkpoint',
+    name: 'CHECKPOINT',
+    icon: '✓',
+    description: 'Checkpoint/Milestone',
+    template: (entry) => `[CHECKPOINT]
+MILESTONE: 
+TIME: ${new Date().toLocaleTimeString()}
+OBJECTIVES MET: 
+NEXT PHASE: 
+ISSUES: `
+  },
+  {
+    id: 'debrief',
+    name: 'DEBRIEF',
+    icon: '📝',
+    description: 'Post-Event Debrief',
+    template: (entry) => `[DEBRIEF]
+EVENT: ${entry.title}
+WHAT HAPPENED: 
+WHAT WORKED: 
+WHAT FAILED: 
+LESSONS LEARNED: 
+RECOMMENDATIONS: `
+  },
+  {
+    id: 'timeline',
+    name: 'TIMELINE',
+    icon: '⏱️',
+    description: 'Timeline Entry',
+    template: (entry) => `[TIMELINE ENTRY]
+T+${Math.floor((Date.now() - entry.timestamp) / 1000)}s: 
+EVENT: ${entry.title}
+SEQUENCE: 
+CONCURRENT EVENTS: 
+SIGNIFICANCE: `
+  }
+]
+
 export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries, onTagEntries, onAddNote }: HistoricalLogViewerProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<FilterType>('all')
@@ -86,6 +218,7 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
   const [showArchived, setShowArchived] = useState(false)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [noteText, setNoteText] = useState('')
+  const [showTemplates, setShowTemplates] = useState(false)
 
   const filteredEntries = useMemo(() => {
     let filtered = [...entries]
@@ -257,6 +390,13 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
   const handleStartEditNote = (entryId: string, existingNote?: string) => {
     setEditingNoteId(entryId)
     setNoteText(existingNote || '')
+    setShowTemplates(!existingNote)
+  }
+
+  const handleApplyTemplate = (template: AnnotationTemplate, entry: EnhancedLogEntry) => {
+    setNoteText(template.template(entry))
+    setShowTemplates(false)
+    toast.success(`Applied ${template.name} template`)
   }
 
   const handleSaveNote = (entryId: string) => {
@@ -276,6 +416,7 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
   const handleCancelEditNote = () => {
     setEditingNoteId(null)
     setNoteText('')
+    setShowTemplates(false)
   }
 
   const getIcon = (type: LogEntry['type']) => {
@@ -679,14 +820,51 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
                             
                             {editingNoteId === entry.id ? (
                               <div className="space-y-2 pt-1">
+                                {showTemplates && (
+                                  <Card className="border-primary/30 bg-background p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <FileText size={14} weight="bold" className="text-primary" />
+                                        <span className="text-[10px] tracking-wider text-muted-foreground uppercase">ANNOTATION TEMPLATES</span>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowTemplates(false)}
+                                        className="h-5 px-1.5 text-[9px]"
+                                      >
+                                        <X size={12} weight="bold" />
+                                      </Button>
+                                    </div>
+                                    <ScrollArea className="max-h-[200px]">
+                                      <div className="grid grid-cols-2 gap-2 pr-3">
+                                        {ANNOTATION_TEMPLATES.map(template => (
+                                          <Button
+                                            key={template.id}
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleApplyTemplate(template, entry)}
+                                            className="h-auto p-2 flex flex-col items-start gap-1 border-primary/20 hover:bg-primary/10 hover:border-primary/50"
+                                          >
+                                            <div className="flex items-center gap-1.5 w-full">
+                                              <span className="text-base">{template.icon}</span>
+                                              <span className="text-[10px] font-bold tracking-wider">{template.name}</span>
+                                            </div>
+                                            <span className="text-[9px] text-muted-foreground text-left">{template.description}</span>
+                                          </Button>
+                                        ))}
+                                      </div>
+                                    </ScrollArea>
+                                  </Card>
+                                )}
                                 <Textarea
                                   value={noteText}
                                   onChange={(e) => setNoteText(e.target.value)}
                                   placeholder="Add annotation note..."
-                                  className="text-[11px] min-h-[60px] border-primary/30 bg-background resize-none"
-                                  autoFocus
+                                  className="text-[11px] min-h-[100px] border-primary/30 bg-background resize-none font-mono"
+                                  autoFocus={!showTemplates}
                                 />
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -695,6 +873,15 @@ export function HistoricalLogViewer({ entries, onDeleteEntries, onArchiveEntries
                                   >
                                     <Note size={12} weight="bold" className="mr-1" />
                                     SAVE NOTE
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowTemplates(!showTemplates)}
+                                    className={`h-6 px-2 text-[10px] ${showTemplates ? 'border-primary bg-primary/10' : 'border-primary/30'} hover:bg-primary/10`}
+                                  >
+                                    <FileText size={12} weight="bold" className="mr-1" />
+                                    {showTemplates ? 'HIDE TEMPLATES' : 'TEMPLATES'}
                                   </Button>
                                   <Button
                                     variant="ghost"

@@ -83,11 +83,18 @@ A covert field agent smartwatch interface that collects and transmits real-time 
 - **Success criteria**: Status posts immediately, confirmation is clear, prevents double-taps during cooldown, high-priority statuses (alerts) use appropriate color coding
 
 ### Historical Mission Log Viewer
-- **Functionality**: Comprehensive log viewer with advanced filtering by event type (critical, warning, success, mission, info, transmission, biometric, location), time range filtering (last hour, 6 hours, 24 hours, 7 days, all time), full-text search across event titles and details, and JSON export capability
+- **Functionality**: Comprehensive log viewer with advanced filtering by event type (critical, warning, success, mission, info, transmission, biometric, location), time range filtering (last hour, 6 hours, 24 hours, 7 days, all time), full-text search across event titles and details, batch operations (delete, archive, tag multiple entries), custom annotation notes, and JSON export capability
 - **Purpose**: Enables M console operators to review and analyze past mission events for after-action reports, identify patterns in agent behavior, and investigate specific incidents during or after operations
 - **Trigger**: User taps "VIEW HISTORICAL LOG" button below the mission log feed
-- **Progression**: User opens historical viewer dialog → Overview stats display (total events, critical count, warning count, mission events) → User enters search terms or selects filters → Results update instantly → User scrolls through filtered timeline with date dividers → User can export filtered results as JSON → Dialog closes, returning to main interface
+- **Progression**: User opens historical viewer dialog → Overview stats display (total events, critical count, warning count, mission events) → User enters search terms or selects filters → Results update instantly → User scrolls through filtered timeline with date dividers → User can select multiple entries for batch operations → User can export filtered results as JSON → Dialog closes, returning to main interface
 - **Success criteria**: Search is instant and accurate, filters combine correctly, date dividers organize events clearly, export generates valid JSON, dialog is responsive and smooth, shows empty state with helpful message when no results match
+
+### Annotation Templates
+- **Functionality**: Pre-defined note formats for common operational situations including SITREP (situation reports), threat assessments, intelligence briefs, communications logs, medical notes, tactical decisions, asset status reports, checkpoint milestones, post-event debriefs, and timeline entries
+- **Purpose**: Accelerates note-taking during high-pressure operations by providing standardized documentation formats that ensure consistent reporting and reduce cognitive load on M console operators
+- **Trigger**: User clicks "ADD NOTE" or "EDIT" on any log entry, then clicks "TEMPLATES" button
+- **Progression**: User opens note editor on log entry → Clicks "TEMPLATES" button → Template selector appears showing 10 pre-formatted options with icons and descriptions → User clicks desired template → Template populates text area with structured format including relevant log entry details → User fills in template fields → Saves annotated note → Template saves to log entry
+- **Success criteria**: Templates apply instantly, formats are clearly structured with fillable fields, relevant event data auto-populates in template, templates save properly with preserved formatting, users can edit/modify templates after applying, templates include checkboxes and consistent field labels
 
 ## Edge Case Handling
 - **Connection Loss**: Display "SIGNAL LOST" warning overlay with reconnection countdown and fallback to cached data
