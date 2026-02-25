@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useKV } from '@github/spark/hooks'
-import { Toaster } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,8 @@ import { AgentInventoryViewer } from '@/components/AgentInventoryViewer'
 import { RealWorldItemCrafter } from '@/components/RealWorldItemCrafter'
 import { DebriefMediaFeed, addDebriefEntryFromWindow } from '@/components/DebriefMediaFeed'
 import { BusinessPartnershipSummary } from '@/components/BusinessPartnershipSummary'
+import { BusinessPartnershipDirectory } from '@/components/BusinessPartnershipDirectory'
+import { BusinessMapOverlay } from '@/components/BusinessMapOverlay'
 import { 
   Heart, 
   MapPin, 
@@ -122,6 +124,8 @@ function App() {
   const [equipment, setEquipment] = useKV<EquipmentItem[]>('equipment-inventory', [])
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [deployLocation, setDeployLocation] = useState<{ gridX: number; gridY: number } | undefined>()
+  const [highlightedBusinessId, setHighlightedBusinessId] = useState<string | null>(null)
+  const [mapFocusGrid, setMapFocusGrid] = useState<{ x: number; y: number } | null>(null)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -1478,6 +1482,31 @@ function App() {
               onStateChange={async () => {
                 const newState = await gameStateSync.getGameState()
                 setGameState(newState)
+              }}
+            />
+
+            <BusinessMapOverlay
+              maxHeight="350px"
+              onBusinessClick={(businessId) => {
+                setHighlightedBusinessId(businessId)
+                addLogEntry('info', 'Business Selected', 'Viewing business on map')
+              }}
+              onNavigateToGrid={(gridX, gridY) => {
+                setMapFocusGrid({ x: gridX, y: gridY })
+                toast.success(`Navigate to Grid ${String.fromCharCode(65 + gridX)}${gridY + 1}`)
+              }}
+            />
+
+            <BusinessPartnershipDirectory 
+              maxHeight="600px"
+              highlightedBusinessId={highlightedBusinessId || undefined}
+              onSelectBusiness={(businessId) => {
+                setHighlightedBusinessId(businessId)
+                addLogEntry('info', 'Business Selected', 'Viewing business partnership details')
+              }}
+              onNavigateToGrid={(gridX, gridY) => {
+                setMapFocusGrid({ x: gridX, y: gridY })
+                addLogEntry('info', 'Navigate to Grid', `Moving to Grid ${String.fromCharCode(65 + gridX)}${gridY + 1}`)
               }}
             />
 
