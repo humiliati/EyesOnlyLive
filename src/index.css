@@ -249,3 +249,17 @@
   }
 }
 
+@keyframes ghost-float {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.95) rotate(3deg);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(0.97) rotate(-2deg);
+  }
+}
+
+.ghost-panel-preview {
+  animation: ghost-float 2s ease-in-out infinite;
+  filter: drop-shadow(0 10px 30px oklch(0.75 0.18 145 / 0.4));
+}
+

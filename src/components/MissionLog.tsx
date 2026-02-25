@@ -48,6 +48,8 @@ export function MissionLog({
   const touchStartX = useRef<number>(0)
   const isTouchDragging = useRef<boolean>(false)
   const [touchActive, setTouchActive] = useState(false)
+  const [ghostPosition, setGhostPosition] = useState<{ x: number; y: number } | null>(null)
+  const ghostRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (entries.length > prevEntriesLength.current && scrollRef.current) {
@@ -134,12 +136,15 @@ export function MissionLog({
       if (deltaY > 10 && deltaY > deltaX) {
         isTouchDragging.current = true
         onDragStart?.('mission-log')
+        setGhostPosition({ x: touch.clientX, y: touch.clientY })
       }
     }
 
     if (isTouchDragging.current) {
       e.preventDefault()
       const touch = e.touches[0]
+      setGhostPosition({ x: touch.clientX, y: touch.clientY })
+      
       const element = document.elementFromPoint(touch.clientX, touch.clientY)
       
       if (element) {
@@ -160,9 +165,11 @@ export function MissionLog({
       isTouchDragging.current = false
     }
     setTouchActive(false)
+    setGhostPosition(null)
   }
 
   return (
+    <>
     <Card 
       data-panel-id="mission-log"
       className={`border-primary/30 p-4 space-y-3 transition-all ${
@@ -254,5 +261,40 @@ export function MissionLog({
         </ScrollArea>
       )}
     </Card>
+    {ghostPosition && isTouchDragging.current && (
+      <div
+        ref={ghostRef}
+        className="fixed pointer-events-none z-50 opacity-80 ghost-panel-preview"
+        style={{
+          left: `${ghostPosition.x}px`,
+          top: `${ghostPosition.y}px`,
+        }}
+      >
+        <Card className="border-primary bg-card shadow-2xl animate-pulse-border w-[calc(100vw-2rem)] max-w-md">
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ClockCounterClockwise weight="bold" className="text-primary" size={16} />
+                <span className="text-xs tracking-[0.08em] uppercase">Mission Log</span>
+              </div>
+              <Badge variant="outline" className="text-[9px] px-2 py-0 border-primary text-primary">
+                {entries.length} EVENTS
+              </Badge>
+            </div>
+            <div className="space-y-2 opacity-60">
+              {entries.slice(-3).map((entry) => (
+                <div key={entry.id} className="border-l-2 border-border/50 pl-3 space-y-0.5">
+                  <div className="text-[10px] font-medium truncate">{entry.title}</div>
+                  <div className="text-[9px] text-muted-foreground truncate">
+                    {entry.details || formatRelativeTime(entry.timestamp)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+    )}
+  </>
   )
 }
