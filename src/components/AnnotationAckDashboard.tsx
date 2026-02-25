@@ -197,9 +197,9 @@ export function AnnotationAckDashboard({
           </div>
         </Card>
         
-        <Card className="bg-card/50 border-primary/20 p-3">
+        <Card className={`bg-card/50 border-primary/20 p-3 ${overdueCount > 0 ? 'animate-pulse-border' : ''}`}>
           <div className="flex items-center gap-2 mb-2">
-            <Warning weight="bold" className={overdueCount > 0 ? "text-destructive" : "text-muted-foreground"} size={12} />
+            <Warning weight="bold" className={overdueCount > 0 ? "text-destructive animate-pulse" : "text-muted-foreground"} size={12} />
             <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Overdue</div>
           </div>
           <div className={`text-2xl font-bold tabular-nums ${overdueCount > 0 ? 'text-destructive' : ''}`}>
@@ -235,7 +235,7 @@ export function AnnotationAckDashboard({
                 key={stat.annotation.id} 
                 className={`p-3 space-y-2 border ${
                   stat.isOverdue 
-                    ? 'border-destructive/50 bg-destructive/5' 
+                    ? 'border-destructive/50 bg-destructive/5 animate-pulse-border' 
                     : 'border-primary/20 bg-card/50'
                 }`}
               >

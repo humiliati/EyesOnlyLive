@@ -25,6 +25,7 @@ import { BroadcastScheduler } from '@/components/BroadcastScheduler'
 import { AnnotationBroadcaster } from '@/components/AnnotationBroadcaster'
 import { AnnotationAcknowledgmentTracker } from '@/components/AnnotationAcknowledgmentTracker'
 import { AnnotationAckDashboard } from '@/components/AnnotationAckDashboard'
+import { OverdueAnnotationAlerts } from '@/components/OverdueAnnotationAlerts'
 import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
 import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
 import { soundGenerator } from '@/lib/sounds'
@@ -1218,6 +1219,15 @@ function App() {
         />
 
         <MPing ping={currentPing || null} onAcknowledge={handleAcknowledgePing} />
+
+        <OverdueAnnotationAlerts
+          annotations={mapAnnotations || []}
+          assets={assetLocations || []}
+          currentAgentId={agentId || 'shadow-7-alpha'}
+          currentAgentCallsign={agentCallsign || 'SHADOW-7'}
+          onAcknowledge={handleAcknowledgeAnnotation}
+          maxHeight="400px"
+        />
 
         <PanicButton 
           agentCallsign={agentCallsign || 'SHADOW-7'} 

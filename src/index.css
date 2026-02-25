@@ -134,3 +134,18 @@
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: oklch(0.75 0.16 75);
+    box-shadow: 0 0 0 oklch(0.75 0.16 75 / 0);
+  }
+  50% {
+    border-color: oklch(0.75 0.16 75 / 0.8);
+    box-shadow: 0 0 8px oklch(0.75 0.16 75 / 0.4);
+  }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 2s ease-in-out infinite;
+}

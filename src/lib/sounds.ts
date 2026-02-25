@@ -347,6 +347,35 @@ class SoundGenerator {
     currentTime = playDot(currentTime)
   }
 
+  playOverdueAlert(severity: 'warning' | 'critical' = 'warning'): void {
+    const ctx = this.getAudioContext()
+    const now = ctx.currentTime
+
+    if (severity === 'critical') {
+      const notes = [
+        { frequency: 1047, duration: 0.12 },
+        { frequency: 880, duration: 0.12 },
+        { frequency: 1047, duration: 0.12 },
+        { frequency: 880, duration: 0.12 }
+      ]
+      
+      notes.forEach((note, index) => {
+        const delay = index * 0.15
+        this.playTone(note.frequency, note.duration, 0.35, 'square', now + delay)
+      })
+    } else {
+      const notes = [
+        { frequency: 880, duration: 0.15 },
+        { frequency: 784, duration: 0.15 }
+      ]
+      
+      notes.forEach((note, index) => {
+        const delay = index * 0.18
+        this.playTone(note.frequency, note.duration, 0.25, 'triangle', now + delay)
+      })
+    }
+  }
+
   stopAllSounds(): void {
     this.repeatTimeouts.forEach(timeout => clearTimeout(timeout))
     this.repeatTimeouts = []
