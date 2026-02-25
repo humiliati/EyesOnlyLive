@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
+import { MissionLog, type LogEntry } from '@/components/MissionLog'
 import { 
   Heart, 
   MapPin, 
@@ -53,6 +54,7 @@ function App() {
     phase: 'INFILTRATION',
     startTime: Date.now()
   })
+  const [logEntries, setLogEntries] = useKV<LogEntry[]>('mission-log', [])
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -72,6 +74,24 @@ function App() {
   const [signalStrength, setSignalStrength] = useState(85)
   const [batteryLevel, setBatteryLevel] = useState(87)
   const [currentTime, setCurrentTime] = useState(new Date())
+
+  const addLogEntry = useCallback((type: LogEntry['type'], title: string, details?: string) => {
+    const newEntry: LogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      type,
+      title,
+      details
+    }
+    setLogEntries((current) => [...(current || []), newEntry])
+  }, [setLogEntries])
+
+  useEffect(() => {
+    if (logEntries && logEntries.length === 0) {
+      addLogEntry('mission', 'Mission Initialized', `${agentCallsign} deployed to field`)
+      addLogEntry('info', 'Telemetry Systems Online', 'All sensors operational')
+    }
+  }, [logEntries, addLogEntry, agentCallsign])
 
   useEffect(() => {
     const bioInterval = setInterval(() => {
@@ -142,6 +162,72 @@ function App() {
       clearInterval(missionInterval)
     }
   }, [setMissionData])
+
+  useEffect(() => {
+    if (biometrics.heartRate > 140) {
+      addLogEntry('critical', 'Critical Heart Rate', `Elevated to ${Math.round(biometrics.heartRate)} BPM`)
+    } else if (biometrics.heartRate > 120) {
+      addLogEntry('warning', 'Elevated Heart Rate', `Increased to ${Math.round(biometrics.heartRate)} BPM`)
+    }
+  }, [Math.floor(biometrics.heartRate / 20)])
+
+  useEffect(() => {
+    if (biometrics.stressLevel > 80) {
+      addLogEntry('critical', 'High Stress Detected', `Stress level at ${Math.round(biometrics.stressLevel)}%`)
+    } else if (biometrics.stressLevel > 60) {
+      addLogEntry('warning', 'Elevated Stress', `Stress level at ${Math.round(biometrics.stressLevel)}%`)
+    }
+  }, [Math.floor(biometrics.stressLevel / 20)])
+
+  useEffect(() => {
+    if (batteryLevel < 20 && batteryLevel > 19) {
+      addLogEntry('warning', 'Low Battery Warning', `Power level critical at ${Math.round(batteryLevel)}%`)
+    } else if (batteryLevel < 10 && batteryLevel > 9) {
+      addLogEntry('critical', 'Critical Battery Level', `Power at ${Math.round(batteryLevel)}% - Conservation mode recommended`)
+    }
+  }, [Math.floor(batteryLevel / 10)])
+
+  useEffect(() => {
+    if (signalStrength < 30 && signalStrength > 20) {
+      addLogEntry('warning', 'Weak Signal', `Signal strength at ${Math.round(signalStrength)}%`)
+    } else if (signalStrength < 20) {
+      addLogEntry('critical', 'Signal Loss Imminent', `Connection unstable at ${Math.round(signalStrength)}%`)
+    }
+  }, [Math.floor(signalStrength / 10)])
+
+  useEffect(() => {
+    const prevTransmitting = isTransmitting
+    return () => {
+      if (isTransmitting && !prevTransmitting) {
+        addLogEntry('transmission', 'Transmission Activated', 'Secure data stream established')
+      } else if (!isTransmitting && prevTransmitting) {
+        addLogEntry('transmission', 'Transmission Ended', 'Data stream terminated')
+      }
+    }
+  }, [isTransmitting])
+
+  useEffect(() => {
+    if (!missionData) return
+    
+    const prevThreat = missionData.threatLevel
+    if (prevThreat !== missionData.threatLevel) {
+      addLogEntry(
+        missionData.threatLevel === 'CRITICAL' || missionData.threatLevel === 'HIGH' ? 'critical' : 'warning',
+        `Threat Level: ${missionData.threatLevel}`,
+        'Mission parameters updated'
+      )
+    }
+
+    if (missionData.progress >= 25 && missionData.progress < 26) {
+      addLogEntry('mission', 'Checkpoint Reached', '25% mission progress achieved')
+    } else if (missionData.progress >= 50 && missionData.progress < 51) {
+      addLogEntry('mission', 'Halfway Point', '50% mission progress - Phase transition')
+    } else if (missionData.progress >= 75 && missionData.progress < 76) {
+      addLogEntry('mission', 'Final Phase', '75% mission progress - Objective in sight')
+    } else if (missionData.progress >= 100) {
+      addLogEntry('success', 'Mission Complete', 'All objectives achieved')
+    }
+  }, [missionData?.progress, missionData?.threatLevel])
 
   const getHeartRateStatus = () => {
     if (biometrics.heartRate > 120) return 'text-destructive'
@@ -353,6 +439,8 @@ function App() {
             </div>
           )}
         </Card>
+
+        <MissionLog entries={logEntries || []} maxHeight="350px" />
 
         {batteryLevel < 20 && (
           <Card className="border-destructive bg-destructive/10 p-3">

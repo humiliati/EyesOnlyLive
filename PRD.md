@@ -47,6 +47,13 @@ A covert field agent smartwatch interface that collects and transmits real-time 
 - **Progression**: Authentication sequence plays → Agent credentials appear → Clearance badge displays → Profile remains accessible in header
 - **Success criteria**: Profile feels official and classified, authentication sequence is slick, credentials are prominent
 
+### Mission Log Timeline
+- **Functionality**: Displays chronological timeline of all mission events, status changes, biometric alerts, and system notifications with timestamps
+- **Purpose**: Provides mission history and situational awareness, creates immersion through detailed event tracking
+- **Trigger**: Automatically logs events as they occur throughout the mission
+- **Progression**: Mission starts → Initial events logged → Biometric/location/transmission changes recorded → Critical alerts flagged → User can scroll through timeline → Events persist between sessions
+- **Success criteria**: Events log in real-time, timeline is easily scannable, critical events are visually distinct, scrolling is smooth, log persists across sessions
+
 ## Edge Case Handling
 - **Connection Loss**: Display "SIGNAL LOST" warning overlay with reconnection countdown and fallback to cached data
 - **Critical Biometrics**: Flash red indicators and display warning messages when heart rate or stress exceeds thresholds

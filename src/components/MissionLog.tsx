@@ -1,0 +1,153 @@
+import { useEffect, useRef } from 'react'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { 
+  ClockCounterClockwise,
+  CheckCircle,
+  WarningCircle,
+  Info,
+  Target,
+  MapPin,
+  Heart,
+  RadioButton
+} from '@phosphor-icons/react'
+
+export interface LogEntry {
+  id: string
+  timestamp: number
+  type: 'info' | 'success' | 'warning' | 'critical' | 'mission' | 'biometric' | 'location' | 'transmission'
+  title: string
+  details?: string
+}
+
+interface MissionLogProps {
+  entries: LogEntry[]
+  maxHeight?: string
+}
+
+export function MissionLog({ entries, maxHeight = '300px' }: MissionLogProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const prevEntriesLength = useRef(entries.length)
+
+  useEffect(() => {
+    if (entries.length > prevEntriesLength.current && scrollRef.current) {
+      const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]')
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight
+      }
+    }
+    prevEntriesLength.current = entries.length
+  }, [entries])
+
+  const getIcon = (type: LogEntry['type']) => {
+    const iconProps = { size: 14, weight: 'bold' as const }
+    
+    switch (type) {
+      case 'success':
+        return <CheckCircle {...iconProps} className="text-primary" />
+      case 'warning':
+        return <WarningCircle {...iconProps} className="text-accent" />
+      case 'critical':
+        return <WarningCircle {...iconProps} className="text-destructive" />
+      case 'mission':
+        return <Target {...iconProps} className="text-primary" />
+      case 'biometric':
+        return <Heart {...iconProps} className="text-primary" />
+      case 'location':
+        return <MapPin {...iconProps} className="text-primary" />
+      case 'transmission':
+        return <RadioButton {...iconProps} className="text-primary" />
+      default:
+        return <Info {...iconProps} className="text-muted-foreground" />
+    }
+  }
+
+  const getTypeColor = (type: LogEntry['type']) => {
+    switch (type) {
+      case 'success':
+        return 'border-primary/50'
+      case 'warning':
+        return 'border-accent/50'
+      case 'critical':
+        return 'border-destructive/50'
+      case 'mission':
+        return 'border-primary/50'
+      case 'biometric':
+        return 'border-primary/40'
+      case 'location':
+        return 'border-primary/40'
+      case 'transmission':
+        return 'border-primary/50'
+      default:
+        return 'border-border/50'
+    }
+  }
+
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp)
+    return date.toTimeString().slice(0, 8)
+  }
+
+  const formatRelativeTime = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000)
+    if (seconds < 60) return `${seconds}s ago`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    return `${hours}h ago`
+  }
+
+  return (
+    <Card className="border-primary/30 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <ClockCounterClockwise weight="bold" className="text-primary" size={16} />
+          <span className="text-xs tracking-[0.08em] uppercase">Mission Log</span>
+        </div>
+        <Badge variant="outline" className="text-[9px] px-2 py-0 border-primary text-primary">
+          {entries.length} EVENTS
+        </Badge>
+      </div>
+
+      <ScrollArea ref={scrollRef} style={{ height: maxHeight }} className="pr-3">
+        <div className="space-y-2">
+          {entries.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-[10px] tracking-wider">
+              NO EVENTS LOGGED
+            </div>
+          ) : (
+            entries.map((entry, index) => (
+              <div
+                key={entry.id}
+                className={`border-l-2 ${getTypeColor(entry.type)} pl-3 pb-2 ${
+                  index === entries.length - 1 ? '' : 'border-b border-border/30 mb-2'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="mt-0.5">{getIcon(entry.type)}</div>
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-[11px] font-medium leading-tight">{entry.title}</div>
+                      <div className="text-[9px] text-muted-foreground tabular-nums shrink-0">
+                        {formatRelativeTime(entry.timestamp)}
+                      </div>
+                    </div>
+                    {entry.details && (
+                      <div className="text-[10px] text-muted-foreground leading-tight">
+                        {entry.details}
+                      </div>
+                    )}
+                    <div className="text-[9px] text-muted-foreground/70 tabular-nums font-mono">
+                      {formatTime(entry.timestamp)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </Card>
+  )
+}
