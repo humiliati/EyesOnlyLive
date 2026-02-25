@@ -61,6 +61,7 @@ function App() {
   const [logEntries, setLogEntries] = useKV<LogEntry[]>('mission-log', [])
   const [currentPing, setCurrentPing] = useKV<PingMessage | null>('current-m-ping', null)
   const [opsFeedEntries, setOpsFeedEntries] = useKV<OpsFeedEntry[]>('ops-feed', [])
+  const [readOpsFeedEntries, setReadOpsFeedEntries] = useKV<string[]>('read-ops-feed-entries', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
@@ -118,6 +119,16 @@ function App() {
       message: 'Acknowledged M directive'
     })
   }, [setCurrentPing, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
+
+  const handleMarkOpsFeedAsRead = useCallback((entryId: string) => {
+    setReadOpsFeedEntries((current) => {
+      const readList = current || []
+      if (!readList.includes(entryId)) {
+        return [...readList, entryId]
+      }
+      return readList
+    })
+  }, [setReadOpsFeedEntries])
 
   useEffect(() => {
     if (currentPing && !currentPing.acknowledged) {
@@ -576,7 +587,13 @@ function App() {
           )}
         </Card>
 
-        <OperationsFeed entries={opsFeedEntries || []} currentAgentId={agentId || 'shadow-7-alpha'} maxHeight="300px" />
+        <OperationsFeed 
+          entries={opsFeedEntries || []} 
+          currentAgentId={agentId || 'shadow-7-alpha'} 
+          maxHeight="300px"
+          readEntries={new Set(readOpsFeedEntries || [])}
+          onMarkAsRead={handleMarkOpsFeedAsRead}
+        />
 
         <MissionLog entries={logEntries || []} maxHeight="350px" />
 

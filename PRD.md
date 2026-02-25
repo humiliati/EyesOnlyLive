@@ -54,6 +54,13 @@ A covert field agent smartwatch interface that collects and transmits real-time 
 - **Progression**: Mission starts → Initial events logged → Biometric/location/transmission changes recorded → Critical alerts flagged → User can scroll through timeline → Events persist between sessions
 - **Success criteria**: Events log in real-time, timeline is easily scannable, critical events are visually distinct, scrolling is smooth, log persists across sessions
 
+### Unread Activity Notifications
+- **Functionality**: Visual notification badges that track and display unread agent activities from the operations feed, automatically marking entries as read when scrolled into view
+- **Purpose**: Ensures agents never miss critical updates from blue team operatives, maintaining situational awareness in fast-moving operations
+- **Trigger**: New activity arrives from other agents in the operations feed
+- **Progression**: New agent activity posted → Unread count badge appears with pulsing animation → Red dot indicators mark specific unread entries → User scrolls to view entry → Entry auto-marks as read after 500ms in viewport → Badge count decrements → All indicators cleared when fully caught up
+- **Success criteria**: Badge shows accurate unread count, individual entries clearly marked as unread, smooth auto-read detection, animations grab attention without being distracting, read state persists between sessions
+
 ## Edge Case Handling
 - **Connection Loss**: Display "SIGNAL LOST" warning overlay with reconnection countdown and fallback to cached data
 - **Critical Biometrics**: Flash red indicators and display warning messages when heart rate or stress exceeds thresholds
