@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
+import { DraggableDataCard } from '@/components/DraggableDataCard'
 import { MissionLog, type LogEntry } from '@/components/MissionLog'
 import { MPing, type PingMessage } from '@/components/MPing'
 import { OperationsFeed, type OpsFeedEntry } from '@/components/OperationsFeed'
@@ -99,11 +100,21 @@ interface MissionData {
   startTime: number
 }
 
+type DataCardId = 'agent-id' | 'biometrics' | 'location' | 'transmission'
+
 function App() {
   const [isTransmitting, setIsTransmitting] = useKV<boolean>('transmission-active', false)
   const [agentCallsign] = useKV<string>('agent-callsign', 'SHADOW-7')
   const [agentId] = useKV<string>('agent-id', 'shadow-7-alpha')
   const [clearanceLevel] = useKV<string>('clearance-level', 'LEVEL 4')
+  const [cardOrder, setCardOrder] = useKV<DataCardId[]>('data-card-order', [
+    'agent-id',
+    'biometrics',
+    'location',
+    'transmission'
+  ])
+  const [draggingCardId, setDraggingCardId] = useState<DataCardId | null>(null)
+  const [dragOverCardId, setDragOverCardId] = useState<DataCardId | null>(null)
   const [missionData, setMissionData] = useKV<MissionData>('mission-data', {
     name: 'OPERATION NIGHTFALL',
     objective: 'Secure Package Alpha',
@@ -247,6 +258,42 @@ function App() {
       return readList
     })
   }, [setReadOpsFeedEntries])
+
+  const handleCardDragStart = useCallback((cardId: string) => {
+    setDraggingCardId(cardId as DataCardId)
+    soundGenerator.playActivityAlert('check-in', 'low')
+  }, [])
+
+  const handleCardDragEnd = useCallback(() => {
+    if (draggingCardId && dragOverCardId && draggingCardId !== dragOverCardId) {
+      setCardOrder((current) => {
+        const newOrder = [...(current || [])]
+        const dragIndex = newOrder.indexOf(draggingCardId)
+        const dropIndex = newOrder.indexOf(dragOverCardId)
+        
+        if (dragIndex !== -1 && dropIndex !== -1) {
+          newOrder.splice(dragIndex, 1)
+          newOrder.splice(dropIndex, 0, draggingCardId)
+          soundGenerator.playActivityAlert('transmission', 'normal')
+          
+          toast.success('Card order updated', {
+            description: 'Data field arrangement saved',
+            duration: 1500,
+          })
+        }
+        
+        return newOrder
+      })
+    }
+    setDraggingCardId(null)
+    setDragOverCardId(null)
+  }, [draggingCardId, dragOverCardId, setCardOrder])
+
+  const handleCardDragOver = useCallback((cardId: string) => {
+    if (draggingCardId && cardId !== draggingCardId) {
+      setDragOverCardId(cardId as DataCardId)
+    }
+  }, [draggingCardId])
 
   const handleQuickResponse = useCallback((response: string, category: string) => {
     addOpsFeedEntry({
@@ -2043,165 +2090,207 @@ function App() {
           onExportTrail={handleExportGPSTrail}
         />
 
-        <Card className="border-primary/30 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Target weight="bold" className="text-primary" size={16} />
-              <span className="text-xs tracking-[0.08em] uppercase">AGENT ID</span>
-            </div>
-            <span className="text-sm font-bold">{agentCallsign}</span>
-          </div>
-          
-          <Separator className="bg-border" />
-          
-          <div className="space-y-1">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Mission</span>
-              <Badge className={`${getThreatColor()} text-[9px] px-2 py-0`}>
-                {missionData.threatLevel}
-              </Badge>
-            </div>
-            <div className="text-sm font-medium">{missionData.name}</div>
-            <div className="text-[10px] text-muted-foreground">{missionData.objective}</div>
-            <div className="pt-2 space-y-1">
-              <div className="flex justify-between text-[10px]">
-                <span className="text-muted-foreground">PROGRESS</span>
-                <span className="tabular-nums">{missionData.progress.toFixed(1)}%</span>
-              </div>
-              <Progress value={missionData.progress} className="h-1.5" />
-            </div>
-          </div>
-        </Card>
+        {(cardOrder || []).map((cardId) => {
+          if (cardId === 'agent-id') {
+            return (
+              <DraggableDataCard
+                key="agent-id"
+                id="agent-id"
+                icon={<Target weight="bold" className="text-primary" size={16} />}
+                title="AGENT ID"
+                headerContent={<span className="text-sm font-bold">{agentCallsign}</span>}
+                canCollapse={false}
+                onDragStart={handleCardDragStart}
+                onDragEnd={handleCardDragEnd}
+                onDragOver={handleCardDragOver}
+                isDragging={draggingCardId === 'agent-id'}
+                isDragTarget={dragOverCardId === 'agent-id'}
+              >
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Mission</span>
+                    <Badge className={`${getThreatColor()} text-[9px] px-2 py-0`}>
+                      {missionData.threatLevel}
+                    </Badge>
+                  </div>
+                  <div className="text-sm font-medium">{missionData.name}</div>
+                  <div className="text-[10px] text-muted-foreground">{missionData.objective}</div>
+                  <div className="pt-2 space-y-1">
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-muted-foreground">PROGRESS</span>
+                      <span className="tabular-nums">{missionData.progress.toFixed(1)}%</span>
+                    </div>
+                    <Progress value={missionData.progress} className="h-1.5" />
+                  </div>
+                </div>
+              </DraggableDataCard>
+            )
+          }
 
-        <Card className="border-primary/30 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Heart weight="bold" className="text-primary" size={16} />
-            <span className="text-xs tracking-[0.08em] uppercase">Biometrics</span>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Heart Rate</div>
-              <div className={`text-xl font-bold tabular-nums ${getHeartRateStatus()}`}>
-                {Math.round(biometrics.heartRate)}
-                <span className="text-xs ml-1">BPM</span>
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Blood O₂</div>
-              <div className="text-xl font-bold tabular-nums text-primary">
-                {Math.round(biometrics.bloodOxygen)}
-                <span className="text-xs ml-1">%</span>
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Stress</div>
-              <div className={`text-xl font-bold tabular-nums ${getStressStatus()}`}>
-                {Math.round(biometrics.stressLevel)}
-                <span className="text-xs ml-1">%</span>
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Body Temp</div>
-              <div className="text-xl font-bold tabular-nums text-primary">
-                {biometrics.temperature.toFixed(1)}
-                <span className="text-xs ml-1">°C</span>
-              </div>
-            </div>
-          </div>
-        </Card>
+          if (cardId === 'biometrics') {
+            return (
+              <DraggableDataCard
+                key="biometrics"
+                id="biometrics"
+                icon={<Heart weight="bold" className="text-primary" size={16} />}
+                title="Biometrics"
+                defaultCollapsed={false}
+                onDragStart={handleCardDragStart}
+                onDragEnd={handleCardDragEnd}
+                onDragOver={handleCardDragOver}
+                isDragging={draggingCardId === 'biometrics'}
+                isDragTarget={dragOverCardId === 'biometrics'}
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Heart Rate</div>
+                    <div className={`text-xl font-bold tabular-nums ${getHeartRateStatus()}`}>
+                      {Math.round(biometrics.heartRate)}
+                      <span className="text-xs ml-1">BPM</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Blood O₂</div>
+                    <div className="text-xl font-bold tabular-nums text-primary">
+                      {Math.round(biometrics.bloodOxygen)}
+                      <span className="text-xs ml-1">%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Stress</div>
+                    <div className={`text-xl font-bold tabular-nums ${getStressStatus()}`}>
+                      {Math.round(biometrics.stressLevel)}
+                      <span className="text-xs ml-1">%</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Body Temp</div>
+                    <div className="text-xl font-bold tabular-nums text-primary">
+                      {biometrics.temperature.toFixed(1)}
+                      <span className="text-xs ml-1">°C</span>
+                    </div>
+                  </div>
+                </div>
+              </DraggableDataCard>
+            )
+          }
 
-        <Card className="border-primary/30 p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <MapPin weight="bold" className="text-primary" size={16} />
-            <span className="text-xs tracking-[0.08em] uppercase">Location</span>
-          </div>
-          
-          <div className="space-y-2">
-            <div className="space-y-1">
-              <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Coordinates</div>
-              <div className="text-xs font-mono tabular-nums text-primary">
-                {formatCoordinate(location.latitude, 6)}°N
-              </div>
-              <div className="text-xs font-mono tabular-nums text-primary">
-                {formatCoordinate(Math.abs(location.longitude), 6)}°W
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              <div className="space-y-1">
-                <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Speed</div>
-                <div className="text-sm font-bold tabular-nums">{location.speed.toFixed(1)}</div>
-                <div className="text-[9px] text-muted-foreground">m/s</div>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Distance</div>
-                <div className="text-sm font-bold tabular-nums">{location.distance.toFixed(2)}</div>
-                <div className="text-[9px] text-muted-foreground">km</div>
-              </div>
-              
-              <div className="space-y-1">
-                <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Elevation</div>
-                <div className="text-sm font-bold tabular-nums">{Math.round(location.elevation)}</div>
-                <div className="text-[9px] text-muted-foreground">m</div>
-              </div>
-            </div>
-          </div>
-        </Card>
+          if (cardId === 'location') {
+            return (
+              <DraggableDataCard
+                key="location"
+                id="location"
+                icon={<MapPin weight="bold" className="text-primary" size={16} />}
+                title="Location"
+                defaultCollapsed={false}
+                onDragStart={handleCardDragStart}
+                onDragEnd={handleCardDragEnd}
+                onDragOver={handleCardDragOver}
+                isDragging={draggingCardId === 'location'}
+                isDragTarget={dragOverCardId === 'location'}
+              >
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Coordinates</div>
+                    <div className="text-xs font-mono tabular-nums text-primary">
+                      {formatCoordinate(location.latitude, 6)}°N
+                    </div>
+                    <div className="text-xs font-mono tabular-nums text-primary">
+                      {formatCoordinate(Math.abs(location.longitude), 6)}°W
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="space-y-1">
+                      <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Speed</div>
+                      <div className="text-sm font-bold tabular-nums">{location.speed.toFixed(1)}</div>
+                      <div className="text-[9px] text-muted-foreground">m/s</div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Distance</div>
+                      <div className="text-sm font-bold tabular-nums">{location.distance.toFixed(2)}</div>
+                      <div className="text-[9px] text-muted-foreground">km</div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Elevation</div>
+                      <div className="text-sm font-bold tabular-nums">{Math.round(location.elevation)}</div>
+                      <div className="text-[9px] text-muted-foreground">m</div>
+                    </div>
+                  </div>
+                </div>
+              </DraggableDataCard>
+            )
+          }
 
-        <Card className="border-primary/30 p-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <RadioButton weight="bold" className={isTransmitting ? 'text-primary pulse-signal' : 'text-muted-foreground'} size={16} />
-            <span className="text-xs tracking-[0.08em] uppercase">Transmission</span>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1">
-                <WifiHigh weight="bold" className="text-primary" size={12} />
-                <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Signal</div>
-              </div>
-              <div className="text-lg font-bold tabular-nums">{Math.round(signalStrength)}%</div>
-            </div>
-            
-            <div className="space-y-1">
-              <div className="flex items-center gap-1">
-                <BatteryFull weight="bold" className={batteryLevel < 20 ? 'text-destructive' : 'text-primary'} size={12} />
-                <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Power</div>
-              </div>
-              <div className="text-lg font-bold tabular-nums">{Math.round(batteryLevel)}%</div>
-            </div>
-            
-            <div className="space-y-1">
-              <div className="flex items-center gap-1">
-                <Lock weight="bold" className="text-primary" size={12} />
-                <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Secure</div>
-              </div>
-              <div className="text-lg font-bold">AES</div>
-            </div>
-          </div>
-          
-          <Button
-            onClick={() => setIsTransmitting((prev) => !prev)}
-            className={`w-full font-bold tracking-wider ${
-              isTransmitting 
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-            }`}
-          >
-            {isTransmitting ? '● TRANSMITTING' : '○ OFFLINE'}
-          </Button>
-          
-          {isTransmitting && (
-            <div className="text-[10px] text-center text-primary animate-pulse">
-              DATA STREAM ACTIVE - ALL TELEMETRY BROADCASTING
-            </div>
-          )}
-        </Card>
+          if (cardId === 'transmission') {
+            return (
+              <DraggableDataCard
+                key="transmission"
+                id="transmission"
+                icon={<RadioButton weight="bold" className={isTransmitting ? 'text-primary pulse-signal' : 'text-muted-foreground'} size={16} />}
+                title="Transmission"
+                defaultCollapsed={false}
+                onDragStart={handleCardDragStart}
+                onDragEnd={handleCardDragEnd}
+                onDragOver={handleCardDragOver}
+                isDragging={draggingCardId === 'transmission'}
+                isDragTarget={dragOverCardId === 'transmission'}
+              >
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <WifiHigh weight="bold" className="text-primary" size={12} />
+                        <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Signal</div>
+                      </div>
+                      <div className="text-lg font-bold tabular-nums">{Math.round(signalStrength)}%</div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <BatteryFull weight="bold" className={batteryLevel < 20 ? 'text-destructive' : 'text-primary'} size={12} />
+                        <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Power</div>
+                      </div>
+                      <div className="text-lg font-bold tabular-nums">{Math.round(batteryLevel)}%</div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <Lock weight="bold" className="text-primary" size={12} />
+                        <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Secure</div>
+                      </div>
+                      <div className="text-lg font-bold">AES</div>
+                    </div>
+                  </div>
+                  
+                  <Button
+                    onClick={() => setIsTransmitting((prev) => !prev)}
+                    className={`w-full font-bold tracking-wider ${
+                      isTransmitting 
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    {isTransmitting ? '● TRANSMITTING' : '○ OFFLINE'}
+                  </Button>
+                  
+                  {isTransmitting && (
+                    <div className="text-[10px] text-center text-primary animate-pulse">
+                      DATA STREAM ACTIVE - ALL TELEMETRY BROADCASTING
+                    </div>
+                  )}
+                </div>
+              </DraggableDataCard>
+            )
+          }
+
+          return null
+        })}
 
         <OperationsFeed 
           entries={opsFeedEntries || []} 

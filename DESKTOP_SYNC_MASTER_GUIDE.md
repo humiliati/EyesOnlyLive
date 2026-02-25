@@ -38,6 +38,7 @@ The application operates in two primary modes, toggled via the **M CONSOLE / WAT
 - Tactical map viewing
 - Mission log
 - Equipment and checklist management
+- **NEW: Drag-to-reorder data field cards**
 
 #### M Console Mode (Desktop Operator)
 - All Watch Mode features PLUS:
@@ -790,7 +791,69 @@ Unlike linear sequences, the Timeline Editor creates **dynamic narrative flows**
 
 ---
 
-### 10. Tactical Map Systems
+### 10. User Interface Enhancements
+
+#### Drag-to-Reorder Data Field Cards
+
+**Location:** Watch mode and M Console mode  
+**Purpose:** Customizable data field layout with Command & Conquer aesthetic polish  
+**Documentation:** See [DRAG_TO_REORDER.md](./DRAG_TO_REORDER.md)
+
+**Features:**
+
+- **Desktop Drag-and-Drop:**
+  - Click and hold six-dot handle (⋮⋮)
+  - Drag card to new position
+  - Drop to reorder
+  - HTML5 drag-and-drop API
+
+- **Touch Gestures:**
+  - Full mobile support
+  - Touch and drag on handle
+  - Responsive touch targets (44x44px)
+  - Smooth gesture detection
+
+- **Visual Feedback (C&C Aesthetic):**
+  - Dragging: Semi-transparent with scale reduction
+  - Drop Target: Pulsing accent border with glow
+  - Hover: Subtle green glow and scale increase
+  - Active Indicator: Pulsing dot on drag handle
+  - Tactical Grid Overlay: Animated background pattern
+  - Corner Accents: Animated corner borders
+
+- **Collapsible Cards:**
+  - Click caret (▼) to collapse/expand
+  - All cards except Agent ID collapsible
+  - Smooth animation transitions
+  - State preserved per card
+  - Can reorder while collapsed or expanded
+
+- **Persistent State:**
+  - Order saved to KV storage (`data-card-order`)
+  - Survives page refreshes
+  - Per-agent customization
+  - Default order configurable
+
+- **Audio Feedback:**
+  - Subtle sound on drag start
+  - Confirmation sound on successful reorder
+  - Toast notification with success message
+
+**Available Cards:**
+1. Agent ID / Mission (non-collapsible)
+2. Biometrics (heart rate, O₂, stress, temperature)
+3. Location (GPS, speed, elevation)
+4. Transmission (signal, power, encryption)
+
+**Use Cases:**
+- Medical officers prioritize Biometrics
+- Navigators prefer Location at top
+- Comms specialists want Transmission prominent
+- Customize based on mission phase
+
+---
+
+### 11. Tactical Map Systems
 
 #### Hybrid Tactical Map
 
