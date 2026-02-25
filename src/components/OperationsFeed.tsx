@@ -172,8 +172,8 @@ export function OperationsFeed({
 
   return (
     <Card 
-      className={`border-primary/30 p-4 space-y-3 relative transition-all cursor-move ${
-        isDragging ? 'drag-target-glow opacity-70 scale-[0.98]' : ''
+      className={`border-primary/30 p-4 space-y-3 relative transition-all ${
+        isDragging ? 'drag-target-glow opacity-70 scale-[0.98] cursor-grabbing' : 'cursor-grab hover:border-primary/50'
       } ${isDragTarget ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
       draggable
       onDragStart={(e) => {
@@ -194,8 +194,11 @@ export function OperationsFeed({
       }}
     >
       <div 
-        className="flex items-center justify-between cursor-pointer"
-        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="flex items-center justify-between cursor-pointer select-none"
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsCollapsed(!isCollapsed)
+        }}
       >
         <div className="flex items-center gap-2">
           <Users weight="bold" className="text-primary" size={16} />
