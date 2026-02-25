@@ -47,6 +47,9 @@ import { ArgEventCreator } from '@/components/ArgEventCreator'
 import { ArgEventDashboard } from '@/components/ArgEventDashboard'
 import { DeadDropManager } from '@/components/DeadDropManager'
 import { AgentInventoryViewer } from '@/components/AgentInventoryViewer'
+import { RealWorldItemCrafter } from '@/components/RealWorldItemCrafter'
+import { DebriefMediaFeed, addDebriefEntryFromWindow } from '@/components/DebriefMediaFeed'
+import { BusinessPartnershipSummary } from '@/components/BusinessPartnershipSummary'
 import { 
   Heart, 
   MapPin, 
@@ -1478,6 +1481,62 @@ function App() {
               }}
             />
 
+            <BusinessPartnershipSummary maxHeight="500px" />
+
+            <RealWorldItemCrafter
+              maxHeight="600px"
+              onItemCrafted={(item) => {
+                addLogEntry('mission', 'Real-World Item Crafted', `${item.name} from ${item.businessOwner.businessName}`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Real-world item crafted: ${item.name}`,
+                  priority: 'normal'
+                })
+                
+                addDebriefEntryFromWindow({
+                  type: 'item-crafted',
+                  title: `Item Crafted: ${item.name}`,
+                  description: item.description,
+                  realWorldItem: item,
+                  mediaUrls: item.photos,
+                  businessName: item.businessOwner.businessName,
+                  ownerName: item.businessOwner.ownerName,
+                  gridLocation: item.businessOwner.gridX !== undefined && item.businessOwner.gridY !== undefined
+                    ? `${String.fromCharCode(65 + item.businessOwner.gridX)}${item.businessOwner.gridY + 1}`
+                    : undefined
+                })
+              }}
+              onItemDeployed={(item) => {
+                addLogEntry('mission', 'Real-World Item Deployed', `${item.name} deployed to field`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Item deployed: ${item.name}`,
+                  priority: 'high'
+                })
+                
+                addDebriefEntryFromWindow({
+                  type: 'item-deployed',
+                  title: `Item Deployed: ${item.name}`,
+                  description: `Now available for field retrieval`,
+                  realWorldItem: item,
+                  mediaUrls: item.photos,
+                  businessName: item.businessOwner.businessName,
+                  gridLocation: item.businessOwner.gridX !== undefined && item.businessOwner.gridY !== undefined
+                    ? `${String.fromCharCode(65 + item.businessOwner.gridX)}${item.businessOwner.gridY + 1}`
+                    : undefined
+                })
+              }}
+            />
+
+            <DebriefMediaFeed
+              maxHeight="600px"
+              autoPlayVideos={false}
+            />
+
             <ArgEventCreator
               scenarioId={missionData?.name}
               onEventCreated={(event) => {
@@ -1519,6 +1578,13 @@ function App() {
                   message: `Dead drop established: ${drop.name}`,
                   priority: 'normal'
                 })
+                
+                addDebriefEntryFromWindow({
+                  type: 'business-participation',
+                  title: `Dead Drop Created: ${drop.name}`,
+                  description: `Location: Grid ${String.fromCharCode(65 + drop.gridX)}${drop.gridY + 1}`,
+                  gridLocation: `${String.fromCharCode(65 + drop.gridX)}${drop.gridY + 1}`
+                })
               }}
               onDropRetrieved={(drop, items) => {
                 addLogEntry('success', 'Dead Drop Retrieved', `${items.length} items collected from ${drop.name}`)
@@ -1528,6 +1594,13 @@ function App() {
                   type: 'mission',
                   message: `Dead drop retrieved: ${drop.name} - ${items.length} items`,
                   priority: 'normal'
+                })
+                
+                addDebriefEntryFromWindow({
+                  type: 'item-retrieved',
+                  title: `Dead Drop Retrieved: ${drop.name}`,
+                  description: `${items.length} items collected`,
+                  gridLocation: `${String.fromCharCode(65 + drop.gridX)}${drop.gridY + 1}`
                 })
               }}
             />
