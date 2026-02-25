@@ -22,6 +22,7 @@ import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAc
 import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { BroadcastScheduler } from '@/components/BroadcastScheduler'
 import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
+import { PatrolRouteTemplates, type PatrolRoute } from '@/components/PatrolRouteTemplates'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { 
@@ -84,6 +85,7 @@ function App() {
   const [trackedBroadcasts, setTrackedBroadcasts] = useKV<TrackedBroadcast[]>('tracked-broadcasts', [])
   const [missionWaypoints, setMissionWaypoints] = useKV<Waypoint[]>('mission-waypoints', [])
   const [distanceMeasurements, setDistanceMeasurements] = useKV<DistanceMeasurement[]>('distance-measurements', [])
+  const [deployedRoutes, setDeployedRoutes] = useKV<PatrolRoute[]>('deployed-routes', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
@@ -345,6 +347,22 @@ function App() {
     })
   }, [setDistanceMeasurements, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
 
+  const handleRouteDeployed = useCallback((route: PatrolRoute) => {
+    setDeployedRoutes((current) => [...(current || []), route])
+    addLogEntry('mission', 'Patrol Route Deployed', `${route.name} with ${route.waypoints.length} waypoints activated`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'mission',
+      message: `Patrol route deployed: ${route.name}`,
+      priority: 'high'
+    })
+  }, [setDeployedRoutes, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
+
+  const handleRouteWaypointsCreated = useCallback((waypoints: Waypoint[]) => {
+    setMissionWaypoints((current) => [...(current || []), ...waypoints])
+  }, [setMissionWaypoints])
+
   const handleBroadcastAcknowledge = useCallback(async (
     broadcastId: string, 
     response: 'acknowledged' | 'unable' | 'negative',
@@ -526,6 +544,30 @@ function App() {
       case 'ops-update': {
         const entry = broadcast.payload
         addOpsFeedEntry(entry)
+        break
+      }
+
+      case 'patrol-route-deploy': {
+        const deployment = broadcast.payload as import('@/lib/mConsoleSync').PatrolRouteDeployment
+        handleRouteDeployed(deployment.route)
+        
+        const waypoints = deployment.route.waypoints.map((wp, index) => ({
+          ...wp,
+          id: `wp-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          createdAt: Date.now()
+        }))
+        handleRouteWaypointsCreated(waypoints)
+        
+        addLogEntry('mission', 'Patrol Route Assigned', `${deployment.route.name} deployed by ${deployment.deployedBy}`)
+        addOpsFeedEntry({
+          agentCallsign: broadcast.broadcastBy,
+          agentId: 'M-CONSOLE',
+          type: 'mission',
+          message: `Patrol route deployed: ${deployment.route.name}`,
+          priority: deployment.priority
+        })
+        
+        soundGenerator.playActivityAlert('mission', deployment.priority)
         break
       }
     }
@@ -1056,6 +1098,11 @@ function App() {
           assets={assetLocations || []}
           onWaypointCreated={handleWaypointCreated}
           onMeasurementCreated={handleMeasurementCreated}
+        />
+
+        <PatrolRouteTemplates
+          onRouteDeployed={handleRouteDeployed}
+          onWaypointsCreated={handleRouteWaypointsCreated}
         />
 
         <GeographicMap 

@@ -1,5 +1,6 @@
 import type { AssetLocation, ActiveLane } from '@/components/GlobalAssetMap'
 import type { OpsFeedEntry } from '@/components/OperationsFeed'
+import type { PatrolRoute } from '@/components/PatrolRouteTemplates'
 
 export interface ScenarioDeployment {
   id: string
@@ -16,6 +17,14 @@ export interface ScenarioDeployment {
   briefing?: string
   objectiveList?: string[]
   threatLevel?: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL'
+}
+
+export interface PatrolRouteDeployment {
+  route: PatrolRoute
+  assignedAgents: string[]
+  deployedBy: string
+  startTime?: number
+  priority: 'low' | 'normal' | 'high' | 'critical'
 }
 
 export interface LaneUpdate {
@@ -47,7 +56,7 @@ export interface BroadcastAcknowledgment {
 
 export interface MConsoleBroadcast {
   id: string
-  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'ops-update' | 'general'
+  type: 'scenario-deploy' | 'lane-update' | 'dispatch-command' | 'm-ping' | 'ops-update' | 'general' | 'patrol-route-deploy'
   payload: any
   timestamp: number
   broadcastBy: string
