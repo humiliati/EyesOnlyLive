@@ -32,7 +32,8 @@ import {
   Eraser,
   Trash,
   Check,
-  X
+  X,
+  CaretDown
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
@@ -149,8 +150,10 @@ export function HybridTacticalMap({
   const [currentDrawing, setCurrentDrawing] = useState<Array<{ lat: number; lng: number }>>([])
   const [drawingLabel, setDrawingLabel] = useState('')
   const [drawingColor, setDrawingColor] = useState('oklch(0.75 0.18 145)')
+  const [drawingNotes, setDrawingNotes] = useState('')
   const [showAnnotationDialog, setShowAnnotationDialog] = useState(false)
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const mapRef = useRef<SVGSVGElement>(null)
 
   const bounds = useMemo((): MapBounds => {
@@ -571,16 +574,27 @@ export function HybridTacticalMap({
   return (
     <div className="space-y-4">
       <Card className="border-primary/30 p-4 space-y-3">
-        <div className="flex items-center justify-between">
+        <div 
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
           <div className="flex items-center gap-2">
             <Globe weight="bold" className="text-primary" size={16} />
             <span className="text-xs tracking-[0.08em] uppercase">Hybrid Tactical Map</span>
+            <CaretDown 
+              weight="bold" 
+              size={12} 
+              className={`text-primary transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
+            />
           </div>
           <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant={showGridOverlay ? "default" : "outline"}
-              onClick={() => setShowGridOverlay(!showGridOverlay)}
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowGridOverlay(!showGridOverlay)
+              }}
               className="text-[9px] h-6 px-2"
             >
               <GridFour weight="bold" size={12} className="mr-1" />
@@ -593,7 +607,9 @@ export function HybridTacticalMap({
           </div>
         </div>
 
-        <Separator className="bg-border" />
+        {!isCollapsed && (
+          <>
+            <Separator className="bg-border" />
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -1318,6 +1334,8 @@ export function HybridTacticalMap({
             </div>
           </div>
         </div>
+        </>
+        )}
       </Card>
 
       <Dialog open={showDispatchDialog} onOpenChange={setShowDispatchDialog}>
