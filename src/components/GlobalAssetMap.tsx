@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   Globe, 
   MapPin, 
@@ -19,7 +20,9 @@ import {
   Eye,
   ArrowRight,
   Users,
-  ListBullets
+  ListBullets,
+  Crosshair,
+  NavigationArrow
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 
@@ -31,6 +34,9 @@ export interface AssetLocation {
   gridY: number
   latitude: number
   longitude: number
+  altitude?: number
+  speed?: number
+  heading?: number
   status: 'active' | 'inactive' | 'alert' | 'enroute'
   lastUpdate: number
 }
@@ -73,6 +79,7 @@ export function GlobalAssetMap({ assets, onDispatchAsset, onCreateLane }: Global
   const [dispatchLogs, setDispatchLogs] = useState<DispatchLog[]>([])
   const [showDispatchDialog, setShowDispatchDialog] = useState(false)
   const [showLaneDialog, setShowLaneDialog] = useState(false)
+  const [showAssetDetailsDialog, setShowAssetDetailsDialog] = useState(false)
   const [dispatchMessage, setDispatchMessage] = useState('')
   const [selectedDispatchAsset, setSelectedDispatchAsset] = useState('')
   const [laneName, setLaneName] = useState('')
@@ -81,6 +88,7 @@ export function GlobalAssetMap({ assets, onDispatchAsset, onCreateLane }: Global
   const [laneAssets, setLaneAssets] = useState<string[]>([])
   const [lanePriority, setLanePriority] = useState<'low' | 'normal' | 'high' | 'critical'>('normal')
   const [hoveredGrid, setHoveredGrid] = useState<{ x: number; y: number } | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
   const addDispatchLog = useCallback((log: Omit<DispatchLog, 'id' | 'timestamp'>) => {
     const newLog: DispatchLog = {
@@ -229,6 +237,25 @@ export function GlobalAssetMap({ assets, onDispatchAsset, onCreateLane }: Global
     return `${hours}h ago`
   }
 
+  const formatCoordinate = (value: number, precision: number = 6) => {
+    return value.toFixed(precision)
+  }
+
+  const formatLatitude = (lat: number) => {
+    const direction = lat >= 0 ? 'N' : 'S'
+    return `${formatCoordinate(Math.abs(lat), 6)}° ${direction}`
+  }
+
+  const formatLongitude = (lng: number) => {
+    const direction = lng >= 0 ? 'E' : 'W'
+    return `${formatCoordinate(Math.abs(lng), 6)}° ${direction}`
+  }
+
+  const openAssetDetails = useCallback((asset: AssetLocation) => {
+    setSelectedAsset(asset)
+    setShowAssetDetailsDialog(true)
+  }, [])
+
   useEffect(() => {
     if (activeLanes.length === 0 && assets.length > 0) {
       const lane: ActiveLane = {
@@ -294,18 +321,124 @@ export function GlobalAssetMap({ assets, onDispatchAsset, onCreateLane }: Global
       <Card className="border-primary/30 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Target weight="bold" className="text-primary" size={16} />
-            <span className="text-xs tracking-[0.08em] uppercase">Tactical Grid</span>
+            <Crosshair weight="bold" className="text-primary" size={16} />
+            <span className="text-xs tracking-[0.08em] uppercase">Live GPS Tracking</span>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setShowLaneDialog(true)}
-            className="text-[9px] h-6 px-2 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Path weight="bold" size={12} className="mr-1" />
-            CREATE LANE
-          </Button>
+          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary text-primary">
+            <RadioButton weight="bold" size={10} className="mr-1 animate-pulse" />
+            LIVE
+          </Badge>
         </div>
+
+        <Separator className="bg-border" />
+
+        <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'grid' | 'list')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 h-7">
+            <TabsTrigger value="grid" className="text-[10px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              GRID VIEW
+            </TabsTrigger>
+            <TabsTrigger value="list" className="text-[10px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              GPS LIST
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="list" className="mt-3 space-y-2">
+            <ScrollArea className="h-[280px]">
+              <div className="space-y-2 pr-3">
+                {assets.length === 0 ? (
+                  <div className="text-[10px] text-muted-foreground text-center py-4">
+                    No assets tracked
+                  </div>
+                ) : (
+                  assets.map(asset => (
+                    <div 
+                      key={asset.id} 
+                      onClick={() => openAssetDetails(asset)}
+                      className="bg-card border border-border p-2.5 space-y-2 hover:border-primary/50 cursor-pointer transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${getStatusColor(asset.status)} ${
+                            asset.status === 'alert' ? 'animate-pulse' : ''
+                          }`} />
+                          <span className="text-xs font-bold">{asset.callsign}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[8px] px-1 py-0 border-primary text-primary">
+                            {GRID_LABELS[asset.gridY]}{asset.gridX + 1}
+                          </Badge>
+                          <span className="text-[9px] text-muted-foreground tabular-nums">
+                            {formatTimeSince(asset.lastUpdate)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-start gap-1.5">
+                          <MapPin weight="bold" className="text-primary mt-0.5" size={10} />
+                          <div className="flex-1 space-y-0.5">
+                            <div className="text-[10px] font-mono tabular-nums text-primary">
+                              {formatLatitude(asset.latitude)}
+                            </div>
+                            <div className="text-[10px] font-mono tabular-nums text-primary">
+                              {formatLongitude(asset.longitude)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {(asset.altitude !== undefined || asset.speed !== undefined || asset.heading !== undefined) && (
+                          <div className="flex gap-3 pt-1">
+                            {asset.altitude !== undefined && (
+                              <div className="space-y-0.5">
+                                <div className="text-[8px] tracking-[0.08em] uppercase text-muted-foreground">ALT</div>
+                                <div className="text-[10px] font-bold tabular-nums">{asset.altitude.toFixed(0)}m</div>
+                              </div>
+                            )}
+                            {asset.speed !== undefined && (
+                              <div className="space-y-0.5">
+                                <div className="text-[8px] tracking-[0.08em] uppercase text-muted-foreground">SPD</div>
+                                <div className="text-[10px] font-bold tabular-nums">{asset.speed.toFixed(1)} m/s</div>
+                              </div>
+                            )}
+                            {asset.heading !== undefined && (
+                              <div className="space-y-0.5 flex items-center gap-1">
+                                <div className="space-y-0.5">
+                                  <div className="text-[8px] tracking-[0.08em] uppercase text-muted-foreground">HDG</div>
+                                  <div className="text-[10px] font-bold tabular-nums">{asset.heading.toFixed(0)}°</div>
+                                </div>
+                                <NavigationArrow 
+                                  weight="bold" 
+                                  size={14} 
+                                  className="text-primary mt-2"
+                                  style={{ transform: `rotate(${asset.heading}deg)` }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="grid" className="mt-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Target weight="bold" className="text-primary" size={16} />
+                <span className="text-xs tracking-[0.08em] uppercase">Tactical Grid</span>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setShowLaneDialog(true)}
+                className="text-[9px] h-6 px-2 bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Path weight="bold" size={12} className="mr-1" />
+                CREATE LANE
+              </Button>
+            </div>
 
         <div className="bg-secondary/30 p-2 rounded border border-border">
           <div className="grid grid-cols-9 gap-0.5">
@@ -401,6 +534,8 @@ export function GlobalAssetMap({ assets, onDispatchAsset, onCreateLane }: Global
             )}
           </div>
         )}
+          </TabsContent>
+        </Tabs>
       </Card>
 
       {activeLanes.length > 0 && (
@@ -669,6 +804,131 @@ export function GlobalAssetMap({ assets, onDispatchAsset, onCreateLane }: Global
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAssetDetailsDialog} onOpenChange={setShowAssetDetailsDialog}>
+        <DialogContent className="bg-card border-primary/30">
+          <DialogHeader>
+            <DialogTitle className="text-sm tracking-[0.08em] uppercase flex items-center gap-2">
+              <Crosshair weight="bold" className="text-primary" size={16} />
+              Asset GPS Details
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedAsset && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${getStatusColor(selectedAsset.status)} ${
+                    selectedAsset.status === 'alert' ? 'animate-pulse' : ''
+                  }`} />
+                  <span className="text-base font-bold">{selectedAsset.callsign}</span>
+                </div>
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary text-primary">
+                  {GRID_LABELS[selectedAsset.gridY]}{selectedAsset.gridX + 1}
+                </Badge>
+              </div>
+
+              <Separator className="bg-border" />
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin weight="bold" className="text-primary" size={14} />
+                    <span className="text-xs tracking-[0.08em] uppercase text-muted-foreground">GPS Coordinates</span>
+                  </div>
+                  <div className="bg-secondary/30 p-3 rounded border border-border space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Latitude</span>
+                      <span className="text-sm font-mono font-bold tabular-nums text-primary">
+                        {formatLatitude(selectedAsset.latitude)}
+                      </span>
+                    </div>
+                    <Separator className="bg-border" />
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Longitude</span>
+                      <span className="text-sm font-mono font-bold tabular-nums text-primary">
+                        {formatLongitude(selectedAsset.longitude)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {(selectedAsset.altitude !== undefined || selectedAsset.speed !== undefined || selectedAsset.heading !== undefined) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <NavigationArrow weight="bold" className="text-primary" size={14} />
+                      <span className="text-xs tracking-[0.08em] uppercase text-muted-foreground">Telemetry</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {selectedAsset.altitude !== undefined && (
+                        <div className="bg-secondary/30 p-2 rounded border border-border text-center">
+                          <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground mb-1">Altitude</div>
+                          <div className="text-lg font-bold tabular-nums text-primary">{selectedAsset.altitude.toFixed(0)}</div>
+                          <div className="text-[9px] text-muted-foreground">meters</div>
+                        </div>
+                      )}
+                      {selectedAsset.speed !== undefined && (
+                        <div className="bg-secondary/30 p-2 rounded border border-border text-center">
+                          <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground mb-1">Speed</div>
+                          <div className="text-lg font-bold tabular-nums text-primary">{selectedAsset.speed.toFixed(1)}</div>
+                          <div className="text-[9px] text-muted-foreground">m/s</div>
+                        </div>
+                      )}
+                      {selectedAsset.heading !== undefined && (
+                        <div className="bg-secondary/30 p-2 rounded border border-border text-center">
+                          <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground mb-1">Heading</div>
+                          <div className="text-lg font-bold tabular-nums text-primary flex items-center justify-center gap-1">
+                            {selectedAsset.heading.toFixed(0)}°
+                            <NavigationArrow 
+                              weight="bold" 
+                              size={14} 
+                              className="text-primary"
+                              style={{ transform: `rotate(${selectedAsset.heading}deg)` }}
+                            />
+                          </div>
+                          <div className="text-[9px] text-muted-foreground">degrees</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <RadioButton weight="bold" className="text-primary" size={14} />
+                    <span className="text-xs tracking-[0.08em] uppercase text-muted-foreground">Status</span>
+                  </div>
+                  <div className="bg-secondary/30 p-2.5 rounded border border-border">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2.5 h-2.5 rounded-full ${getStatusColor(selectedAsset.status)}`} />
+                        <span className="text-xs font-bold uppercase">{selectedAsset.status}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground tabular-nums">
+                        Updated {formatTimeSince(selectedAsset.lastUpdate)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-accent/10 border border-accent/30 p-2.5 rounded">
+                  <div className="text-[10px] text-center">
+                    <span className="text-muted-foreground">Agent ID:</span>{' '}
+                    <span className="font-mono font-bold text-primary">{selectedAsset.agentId}</span>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => setShowAssetDetailsDialog(false)}
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                CLOSE
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

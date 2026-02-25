@@ -270,6 +270,9 @@ function App() {
         gridY: agent.gridY,
         latitude: 40.7128 + (Math.random() - 0.5) * 0.1,
         longitude: -74.0060 + (Math.random() - 0.5) * 0.1,
+        altitude: 10 + Math.random() * 50,
+        speed: Math.random() * 3,
+        heading: Math.random() * 360,
         status: 'active' as const,
         lastUpdate: Date.now()
       }))
@@ -296,6 +299,26 @@ function App() {
     }, 25000)
 
     return () => clearInterval(assetUpdateInterval)
+  }, [setAssetLocations])
+
+  useEffect(() => {
+    const gpsUpdateInterval = setInterval(() => {
+      setAssetLocations((current) => {
+        if (!current || current.length === 0) return current || []
+        
+        return current.map(asset => ({
+          ...asset,
+          latitude: asset.latitude + (Math.random() - 0.5) * 0.0001,
+          longitude: asset.longitude + (Math.random() - 0.5) * 0.0001,
+          altitude: Math.max(0, Math.min(100, (asset.altitude || 10) + (Math.random() - 0.5) * 2)),
+          speed: Math.max(0, Math.min(5, (asset.speed || 0) + (Math.random() - 0.5) * 0.3)),
+          heading: ((asset.heading || 0) + (Math.random() - 0.5) * 5 + 360) % 360,
+          lastUpdate: Date.now()
+        }))
+      })
+    }, 3000)
+
+    return () => clearInterval(gpsUpdateInterval)
   }, [setAssetLocations])
 
   useEffect(() => {
