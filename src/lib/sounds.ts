@@ -306,6 +306,47 @@ class SoundGenerator {
     }
   }
 
+  playSOSAlert(): void {
+    const ctx = this.getAudioContext()
+    const now = ctx.currentTime
+
+    const dotDuration = 0.08
+    const dashDuration = 0.24
+    const elementGap = 0.12
+    const letterGap = 0.3
+    
+    const frequency = 1200
+    const volume = 0.45
+
+    let currentTime = now
+
+    const playDot = (startTime: number) => {
+      this.playTone(frequency, dotDuration, volume, 'sine', startTime)
+      return startTime + dotDuration + elementGap
+    }
+
+    const playDash = (startTime: number) => {
+      this.playTone(frequency, dashDuration, volume, 'sine', startTime)
+      return startTime + dashDuration + elementGap
+    }
+
+    currentTime = playDot(currentTime)
+    currentTime = playDot(currentTime)
+    currentTime = playDot(currentTime)
+    
+    currentTime += letterGap
+
+    currentTime = playDash(currentTime)
+    currentTime = playDash(currentTime)
+    currentTime = playDash(currentTime)
+    
+    currentTime += letterGap
+
+    currentTime = playDot(currentTime)
+    currentTime = playDot(currentTime)
+    currentTime = playDot(currentTime)
+  }
+
   stopAllSounds(): void {
     this.repeatTimeouts.forEach(timeout => clearTimeout(timeout))
     this.repeatTimeouts = []

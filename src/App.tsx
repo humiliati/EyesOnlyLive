@@ -11,6 +11,7 @@ import { OperationsFeed, type OpsFeedEntry } from '@/components/OperationsFeed'
 import { QuickResponse } from '@/components/QuickResponse'
 import { StatusUpdate } from '@/components/StatusUpdate'
 import { SituationPanel } from '@/components/SituationPanel'
+import { PanicButton } from '@/components/PanicButton'
 import { soundGenerator } from '@/lib/sounds'
 import { 
   Heart, 
@@ -153,6 +154,36 @@ function App() {
       priority: type === 'alert' ? 'high' : 'normal'
     })
     addLogEntry(type as LogEntry['type'], 'Status Updated', status)
+  }, [addOpsFeedEntry, addLogEntry, agentCallsign, agentId])
+
+  const handleSOSBroadcast = useCallback((sosMessage: string) => {
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'alert',
+      message: sosMessage,
+      priority: 'critical'
+    })
+    addLogEntry('critical', 'EMERGENCY SOS BROADCAST', sosMessage)
+    
+    const blueTeamAgents = [
+      { callsign: 'PHANTOM-3', id: 'phantom-3-bravo' },
+      { callsign: 'VIPER-5', id: 'viper-5-charlie' },
+      { callsign: 'RAVEN-2', id: 'raven-2-delta' },
+      { callsign: 'FALCON-8', id: 'falcon-8-echo' },
+    ]
+    
+    blueTeamAgents.forEach((agent, index) => {
+      setTimeout(() => {
+        addOpsFeedEntry({
+          agentCallsign: agent.callsign,
+          agentId: agent.id,
+          type: 'alert',
+          message: `Received SOS from ${agentCallsign} - Responding`,
+          priority: 'high'
+        })
+      }, 1500 + index * 800)
+    })
   }, [addOpsFeedEntry, addLogEntry, agentCallsign, agentId])
 
   useEffect(() => {
@@ -465,6 +496,12 @@ function App() {
         />
 
         <MPing ping={currentPing || null} onAcknowledge={handleAcknowledgePing} />
+
+        <PanicButton 
+          agentCallsign={agentCallsign || 'SHADOW-7'} 
+          agentId={agentId || 'shadow-7-alpha'} 
+          onSOSBroadcast={handleSOSBroadcast}
+        />
 
         <QuickResponse onSendResponse={handleQuickResponse} agentCallsign={agentCallsign || 'SHADOW-7'} />
 
