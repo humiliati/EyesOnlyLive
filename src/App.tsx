@@ -40,6 +40,9 @@ import { gameStateSync, type GameState } from '@/lib/gameStateSync'
 import { GameControlPanel } from '@/components/GameControlPanel'
 import { RedTeamTelemetryPanel } from '@/components/RedTeamTelemetryPanel'
 import { RedTeamManagementPanel } from '@/components/RedTeamManagementPanel'
+import { EquipmentInventory, type EquipmentItem } from '@/components/EquipmentInventory'
+import { EquipmentDeploymentDialog } from '@/components/EquipmentDeploymentDialog'
+import { EquipmentMapOverlay } from '@/components/EquipmentMapOverlay'
 import { 
   Heart, 
   MapPin, 
@@ -109,6 +112,9 @@ function App() {
   const [redTeamTelemetry, setRedTeamTelemetry] = useState<import('@/lib/gameStateSync').PlayerTelemetry[]>([])
   const [commLogs, setCommLogs] = useKV<CommLog[]>('communications-log', [])
   const [checklists, setChecklists] = useKV<Checklist[]>('tactical-checklists', [])
+  const [equipment, setEquipment] = useKV<EquipmentItem[]>('equipment-inventory', [])
+  const [deployDialogOpen, setDeployDialogOpen] = useState(false)
+  const [deployLocation, setDeployLocation] = useState<{ gridX: number; gridY: number } | undefined>()
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -349,6 +355,48 @@ function App() {
     setChecklists((current) => (current || []).filter(c => c.id !== checklistId))
     addLogEntry('info', 'Checklist Deleted', 'Checklist removed from system')
   }, [setChecklists, addLogEntry])
+
+  const handleEquipmentDeployed = useCallback((item: EquipmentItem) => {
+    const locationDesc = item.gridX !== undefined && item.gridY !== undefined
+      ? `Grid ${String.fromCharCode(65 + item.gridX)}${item.gridY + 1}`
+      : 'coordinates'
+    
+    addLogEntry('mission', 'Equipment Deployed', `${item.name} (${item.serialNumber}) deployed to ${item.assignedToType}: ${item.assignedToName}`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'mission',
+      message: `${item.assignedToType?.toUpperCase()} established: ${item.assignedToName} - ${item.name}`,
+      priority: item.priority === 'critical' || item.priority === 'high' ? 'high' : 'normal'
+    })
+
+    if (item.requiresAcknowledgment) {
+      const newCommLog: CommLog = {
+        id: `comm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        direction: 'outgoing',
+        from: agentCallsign || 'SHADOW-7',
+        to: 'ALL-STATIONS',
+        message: `${item.assignedToType?.toUpperCase()}: ${item.assignedToName} at ${locationDesc} - ACK required`,
+        channel: 'tactical',
+        priority: item.priority === 'critical' ? 'critical' : item.priority === 'high' ? 'high' : 'normal',
+        encrypted: item.encrypted,
+        acknowledged: false
+      }
+      setCommLogs((current) => [...(current || []), newCommLog])
+    }
+  }, [addLogEntry, addOpsFeedEntry, agentCallsign, agentId, setCommLogs])
+
+  const handleEquipmentRetrieved = useCallback((item: EquipmentItem) => {
+    addLogEntry('success', 'Equipment Retrieved', `${item.name} (${item.serialNumber}) recovered from ${item.assignedToType}: ${item.assignedToName}`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'mission',
+      message: `Equipment retrieved: ${item.name} from ${item.assignedToName}`,
+      priority: 'normal'
+    })
+  }, [addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
 
   const handleDispatchAsset = useCallback((assetId: string, targetGrid: { x: number; y: number }, message: string) => {
     setAssetLocations((current) => {
@@ -1484,6 +1532,22 @@ function App() {
                 }
               }}
             />
+
+            <EquipmentInventory
+              assets={allAssets}
+              maxHeight="500px"
+              onItemDeployed={handleEquipmentDeployed}
+              onItemRetrieved={handleEquipmentRetrieved}
+              currentUser={agentCallsign || 'SHADOW-7'}
+            />
+
+            <EquipmentMapOverlay
+              equipment={equipment || []}
+              maxHeight="400px"
+              onItemClick={(item) => {
+                addLogEntry('info', 'Equipment Selected', `Viewing ${item.name} at ${item.assignedToName}`)
+              }}
+            />
           </>
         )}
 
@@ -1550,6 +1614,46 @@ function App() {
           onCreateLane={handleCreateLane}
           onCreateAnnotation={handleCreateAnnotation}
           onDeleteAnnotation={handleDeleteAnnotation}
+        />
+
+        <EquipmentDeploymentDialog
+          open={deployDialogOpen}
+          onOpenChange={setDeployDialogOpen}
+          availableEquipment={equipment || []}
+          assets={allAssets}
+          preselectedLocation={deployLocation}
+          onDeploy={(itemId, deployData) => {
+            setEquipment((current) => {
+              return (current || []).map(item => {
+                if (item.id === itemId) {
+                  const updatedItem: EquipmentItem = {
+                    ...item,
+                    status: 'deployed',
+                    ...deployData,
+                    deployedAt: Date.now(),
+                    history: [
+                      ...item.history,
+                      {
+                        timestamp: Date.now(),
+                        action: 'deployed',
+                        performedBy: agentCallsign || 'SHADOW-7',
+                        details: `Deployed to ${deployData.assignedToType}: ${deployData.assignedToName}`,
+                        location: {
+                          gridX: deployData.gridX,
+                          gridY: deployData.gridY,
+                          latitude: deployData.latitude,
+                          longitude: deployData.longitude
+                        }
+                      }
+                    ]
+                  }
+                  handleEquipmentDeployed(updatedItem)
+                  return updatedItem
+                }
+                return item
+              })
+            })
+          }}
         />
 
         <GeographicMap 
