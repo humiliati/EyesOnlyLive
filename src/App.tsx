@@ -21,6 +21,7 @@ import { ScenarioCreator } from '@/components/ScenarioCreator'
 import { BroadcastAcknowledgmentTracker, type TrackedBroadcast, type BroadcastAcknowledgment } from '@/components/BroadcastAcknowledgment'
 import { BroadcastTemplates } from '@/components/BroadcastTemplates'
 import { BroadcastScheduler } from '@/components/BroadcastScheduler'
+import { MissionPlanner, type Waypoint, type DistanceMeasurement } from '@/components/MissionPlanner'
 import { soundGenerator } from '@/lib/sounds'
 import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { 
@@ -81,6 +82,8 @@ function App() {
   const [activeLanes, setActiveLanes] = useKV<ActiveLane[]>('active-lanes', [])
   const [gpsTrails, setGpsTrails] = useKV<AssetTrail[]>('gps-trails', [])
   const [trackedBroadcasts, setTrackedBroadcasts] = useKV<TrackedBroadcast[]>('tracked-broadcasts', [])
+  const [missionWaypoints, setMissionWaypoints] = useKV<Waypoint[]>('mission-waypoints', [])
+  const [distanceMeasurements, setDistanceMeasurements] = useKV<DistanceMeasurement[]>('distance-measurements', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
@@ -317,6 +320,30 @@ function App() {
       addLogEntry('info', 'GPS Trail Exported', `Trail data exported for ${asset.callsign}`)
     }
   }, [assetLocations, addLogEntry])
+
+  const handleWaypointCreated = useCallback((waypoint: Waypoint) => {
+    setMissionWaypoints((current) => [...(current || []), waypoint])
+    addLogEntry('mission', 'Waypoint Created', `${waypoint.name} plotted at coordinates`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'mission',
+      message: `Mission waypoint created: ${waypoint.name}`,
+      priority: 'normal'
+    })
+  }, [setMissionWaypoints, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
+
+  const handleMeasurementCreated = useCallback((measurement: DistanceMeasurement) => {
+    setDistanceMeasurements((current) => [...(current || []), measurement])
+    addLogEntry('mission', 'Distance Measured', `${measurement.name} - ${measurement.totalDistance.toFixed(2)}km total distance`)
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'mission',
+      message: `Distance measurement recorded: ${measurement.name}`,
+      priority: 'normal'
+    })
+  }, [setDistanceMeasurements, addLogEntry, addOpsFeedEntry, agentCallsign, agentId])
 
   const handleBroadcastAcknowledge = useCallback(async (
     broadcastId: string, 
@@ -1024,6 +1051,12 @@ function App() {
         <QuickResponse onSendResponse={handleQuickResponse} agentCallsign={agentCallsign || 'SHADOW-7'} />
 
         <StatusUpdate onStatusUpdate={handleStatusUpdate} agentCallsign={agentCallsign || 'SHADOW-7'} />
+
+        <MissionPlanner 
+          assets={assetLocations || []}
+          onWaypointCreated={handleWaypointCreated}
+          onMeasurementCreated={handleMeasurementCreated}
+        />
 
         <GeographicMap 
           assets={assetLocations || []}
