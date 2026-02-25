@@ -15,6 +15,7 @@ import { SituationPanel } from '@/components/SituationPanel'
 import { PanicButton } from '@/components/PanicButton'
 import { HistoricalLogViewer, type EnhancedLogEntry } from '@/components/HistoricalLogViewer'
 import { GlobalAssetMap, type AssetLocation, type ActiveLane } from '@/components/GlobalAssetMap'
+import { GPSBreadcrumbTrail, type AssetTrail, type GPSCoordinate } from '@/components/GPSBreadcrumbTrail'
 import { soundGenerator } from '@/lib/sounds'
 import { 
   Heart, 
@@ -71,6 +72,7 @@ function App() {
   const [readOpsFeedEntries, setReadOpsFeedEntries] = useKV<string[]>('read-ops-feed-entries', [])
   const [assetLocations, setAssetLocations] = useKV<AssetLocation[]>('asset-locations', [])
   const [activeLanes, setActiveLanes] = useKV<ActiveLane[]>('active-lanes', [])
+  const [gpsTrails, setGpsTrails] = useKV<AssetTrail[]>('gps-trails', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
@@ -253,6 +255,25 @@ function App() {
     addLogEntry('mission', 'Lane Created', `Active lane "${lane.name}" established with ${lane.assignedAssets.length} asset(s)`)
   }, [setActiveLanes, addLogEntry])
 
+  const handleClearGPSTrail = useCallback((assetId: string) => {
+    setGpsTrails((current) => {
+      return (current || []).map(trail => 
+        trail.assetId === assetId ? { ...trail, coordinates: [] } : trail
+      )
+    })
+    const asset = assetLocations?.find(a => a.id === assetId)
+    if (asset) {
+      addLogEntry('info', 'GPS Trail Cleared', `History cleared for ${asset.callsign}`)
+    }
+  }, [setGpsTrails, assetLocations, addLogEntry])
+
+  const handleExportGPSTrail = useCallback((assetId: string) => {
+    const asset = assetLocations?.find(a => a.id === assetId)
+    if (asset) {
+      addLogEntry('info', 'GPS Trail Exported', `Trail data exported for ${asset.callsign}`)
+    }
+  }, [assetLocations, addLogEntry])
+
   useEffect(() => {
     if (assetLocations && assetLocations.length === 0) {
       const blueTeamAgents = [
@@ -281,6 +302,72 @@ function App() {
       addLogEntry('info', 'Asset Tracking Initialized', `${initialAssets.length} assets detected on tactical grid`)
     }
   }, [assetLocations, setAssetLocations, addLogEntry])
+
+  useEffect(() => {
+    if (assetLocations && assetLocations.length > 0) {
+      setGpsTrails((current) => {
+        const existingTrails = current || []
+        const updatedTrails = assetLocations.map(asset => {
+          const existingTrail = existingTrails.find(t => t.assetId === asset.id)
+          if (existingTrail) {
+            return existingTrail
+          }
+          return {
+            assetId: asset.id,
+            callsign: asset.callsign,
+            coordinates: [],
+            status: asset.status,
+            color: asset.status === 'alert' 
+              ? 'oklch(0.65 0.25 25)' 
+              : asset.status === 'enroute'
+              ? 'oklch(0.75 0.16 75)'
+              : 'oklch(0.75 0.18 145)'
+          }
+        })
+        return updatedTrails
+      })
+    }
+  }, [assetLocations, setGpsTrails])
+
+  useEffect(() => {
+    const gpsHistoryInterval = setInterval(() => {
+      if (assetLocations && assetLocations.length > 0) {
+        setGpsTrails((current) => {
+          const trails = current || []
+          return trails.map(trail => {
+            const asset = assetLocations.find(a => a.id === trail.assetId)
+            if (!asset) return trail
+
+            const newCoordinate: GPSCoordinate = {
+              latitude: asset.latitude,
+              longitude: asset.longitude,
+              altitude: asset.altitude,
+              timestamp: Date.now()
+            }
+
+            const updatedCoordinates = [...trail.coordinates, newCoordinate]
+            const maxCoordinates = 100
+            const trimmedCoordinates = updatedCoordinates.length > maxCoordinates
+              ? updatedCoordinates.slice(-maxCoordinates)
+              : updatedCoordinates
+
+            return {
+              ...trail,
+              coordinates: trimmedCoordinates,
+              status: asset.status,
+              color: asset.status === 'alert' 
+                ? 'oklch(0.65 0.25 25)' 
+                : asset.status === 'enroute'
+                ? 'oklch(0.75 0.16 75)'
+                : 'oklch(0.75 0.18 145)'
+            }
+          })
+        })
+      }
+    }, 5000)
+
+    return () => clearInterval(gpsHistoryInterval)
+  }, [assetLocations, setGpsTrails])
 
   useEffect(() => {
     const assetUpdateInterval = setInterval(() => {
@@ -648,6 +735,12 @@ function App() {
           assets={assetLocations || []}
           onDispatchAsset={handleDispatchAsset}
           onCreateLane={handleCreateLane}
+        />
+
+        <GPSBreadcrumbTrail 
+          trails={gpsTrails || []}
+          onClearTrail={handleClearGPSTrail}
+          onExportTrail={handleExportGPSTrail}
         />
 
         <Card className="border-primary/30 p-4 space-y-3">
