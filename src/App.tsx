@@ -54,6 +54,9 @@ import { BusinessPartnershipSummary } from '@/components/BusinessPartnershipSumm
 import { BusinessPartnershipDirectory } from '@/components/BusinessPartnershipDirectory'
 import { BusinessMapOverlay } from '@/components/BusinessMapOverlay'
 import { AddBusinessPartnerDialog, type BusinessPartner } from '@/components/AddBusinessPartnerDialog'
+import { EventSequencerPanel } from '@/components/EventSequencerPanel'
+import { SequenceTemplateSelector } from '@/components/SequenceTemplateSelector'
+import { eventSequencer } from '@/lib/eventSequencer'
 import { 
   Heart, 
   MapPin, 
@@ -863,6 +866,7 @@ function App() {
   useEffect(() => {
     mConsoleSync.startSync(3000)
     gameStateSync.startSync(1000)
+    eventSequencer.startScheduleChecker()
     
     const unsubscribe = mConsoleSync.onBroadcast(handleBroadcastReceived)
     syncUnsubscribeRef.current = unsubscribe
@@ -1506,6 +1510,42 @@ function App() {
               onStateChange={async () => {
                 const newState = await gameStateSync.getGameState()
                 setGameState(newState)
+              }}
+            />
+
+            <EventSequencerPanel
+              maxHeight="500px"
+              currentUser={agentCallsign || 'M-CONSOLE'}
+              onSequenceStarted={(sequence) => {
+                addLogEntry('mission', 'Event Sequence Started', `${sequence.name} initiated - ${sequence.steps.length} steps`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Automated sequence started: ${sequence.name}`,
+                  priority: 'high'
+                })
+              }}
+              onSequencePaused={(sequence) => {
+                addLogEntry('info', 'Event Sequence Paused', `${sequence.name} operations suspended`)
+              }}
+              onSequenceCompleted={(sequence) => {
+                addLogEntry('success', 'Event Sequence Complete', `${sequence.name} finished all steps`)
+                addOpsFeedEntry({
+                  agentCallsign: 'M-CONSOLE',
+                  agentId: 'M-CONSOLE',
+                  type: 'mission',
+                  message: `Automated sequence completed: ${sequence.name}`,
+                  priority: 'normal'
+                })
+              }}
+            />
+
+            <SequenceTemplateSelector
+              maxHeight="400px"
+              currentUser={agentCallsign || 'M-CONSOLE'}
+              onTemplateSelected={(template) => {
+                addLogEntry('info', 'Template Applied', `Sequence created from template: ${template.name}`)
               }}
             />
 
