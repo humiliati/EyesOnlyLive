@@ -212,3 +212,40 @@
   border-right: 2px solid oklch(0.75 0.18 145);
   animation: corner-glow 2s ease-in-out infinite;
 }
+
+@keyframes touch-press {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.touch-active {
+  animation: touch-press 0.15s ease-out;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .cursor-grab {
+    cursor: default;
+  }
+  
+  .cursor-grabbing {
+    cursor: default;
+  }
+  
+  [draggable="true"] {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+  }
+}
+

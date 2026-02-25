@@ -44,6 +44,10 @@ export function MissionLog({
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevEntriesLength = useRef(entries.length)
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const touchStartY = useRef<number>(0)
+  const touchStartX = useRef<number>(0)
+  const isTouchDragging = useRef<boolean>(false)
+  const [touchActive, setTouchActive] = useState(false)
 
   useEffect(() => {
     if (entries.length > prevEntriesLength.current && scrollRef.current) {
@@ -113,11 +117,59 @@ export function MissionLog({
     return `${hours}h ago`
   }
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0]
+    touchStartY.current = touch.clientY
+    touchStartX.current = touch.clientX
+    isTouchDragging.current = false
+    setTouchActive(true)
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isTouchDragging.current) {
+      const touch = e.touches[0]
+      const deltaY = Math.abs(touch.clientY - touchStartY.current)
+      const deltaX = Math.abs(touch.clientX - touchStartX.current)
+      
+      if (deltaY > 10 && deltaY > deltaX) {
+        isTouchDragging.current = true
+        onDragStart?.('mission-log')
+      }
+    }
+
+    if (isTouchDragging.current) {
+      e.preventDefault()
+      const touch = e.touches[0]
+      const element = document.elementFromPoint(touch.clientX, touch.clientY)
+      
+      if (element) {
+        const panel = element.closest('[data-panel-id]')
+        if (panel) {
+          const panelId = panel.getAttribute('data-panel-id')
+          if (panelId) {
+            onDragOver?.(panelId)
+          }
+        }
+      }
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (isTouchDragging.current) {
+      onDragEnd?.()
+      isTouchDragging.current = false
+    }
+    setTouchActive(false)
+  }
+
   return (
     <Card 
+      data-panel-id="mission-log"
       className={`border-primary/30 p-4 space-y-3 transition-all ${
         isDragging ? 'drag-target-glow opacity-70 scale-[0.98] cursor-grabbing' : 'cursor-grab hover:border-primary/50'
-      } ${isDragTarget ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}`}
+      } ${isDragTarget ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''} ${
+        touchActive ? 'touch-active' : ''
+      }`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move'
@@ -135,6 +187,10 @@ export function MissionLog({
         e.preventDefault()
         onDragOver?.('mission-log')
       }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       <div 
         className="flex items-center justify-between cursor-pointer select-none"
