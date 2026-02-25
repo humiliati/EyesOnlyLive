@@ -1,0 +1,118 @@
+# Planning Guide
+
+A covert field agent smartwatch interface that collects and transmits real-time biometric and operational telemetry to a Live ARG mission control console, immersing participants in a tactical intelligence gathering experience.
+
+**Experience Qualities**:
+1. **Classified** - Users should feel like they're accessing restricted military-grade equipment with sensitive operational data
+2. **Tactical** - Every interaction should feel purposeful, efficient, and mission-critical with no wasted space or frivolous elements
+3. **Immersive** - The interface should blur the line between simulation and reality, making participants feel like active field operatives
+
+**Complexity Level**: Light Application (multiple features with basic state)
+- This is a focused telemetry collection interface with multiple data streams (biometrics, location, mission status) that persist state and simulate real-time updates, but doesn't require complex multi-view navigation or advanced data processing
+
+## Essential Features
+
+### Real-Time Biometric Monitoring
+- **Functionality**: Displays simulated heart rate, blood oxygen, stress level, and body temperature with live updating values
+- **Purpose**: Creates immersion by showing the agent's physical state and adds realism to the ARG experience
+- **Trigger**: Automatically starts when app loads
+- **Progression**: App loads → Biometric sensors initialize → Values update every 2-3 seconds with realistic fluctuations → Visual indicators show status (normal/elevated/critical)
+- **Success criteria**: Metrics update smoothly, values stay within realistic ranges, stress indicators respond to simulated mission events
+
+### Location & Movement Tracking
+- **Functionality**: Shows current coordinates, movement speed, distance traveled, and elevation with GPS-style precision
+- **Purpose**: Reinforces the field operative narrative and provides spatial context for mission tracking
+- **Trigger**: Automatically starts with biometric monitoring
+- **Progression**: GPS initializes → Coordinates display with decimal precision → Movement metrics calculate based on simulated position changes → Map grid reference updates
+- **Success criteria**: Coordinates appear authentic, movement data correlates logically, updates feel real-time
+
+### Mission Status Dashboard
+- **Functionality**: Displays current mission name, objective status, time elapsed, threat level, and operational phase
+- **Purpose**: Provides narrative context and mission urgency to drive engagement
+- **Trigger**: Loads with initial mission parameters
+- **Progression**: Mission brief displays → Objective checklist shows progress → Threat level indicator updates based on conditions → Phase transitions trigger status changes
+- **Success criteria**: Mission data is clearly readable, status updates feel consequential, threat indicators grab attention
+
+### Telemetry Transmission Control
+- **Functionality**: Manual control to start/stop telemetry broadcast with signal strength indicator and encryption status
+- **Purpose**: Gives agents control over their data stream and adds tactical decision-making element
+- **Trigger**: User toggles transmission button
+- **Progression**: User taps transmit button → Connection sequence animates → Signal strength indicator appears → Encryption status confirms → Data streams to console → User can disable transmission
+- **Success criteria**: Toggle feels responsive, connection sequence is satisfying, encryption status is clear, transmission state persists
+
+### Agent Profile & Authentication
+- **Functionality**: Shows agent callsign, clearance level, unit designation, and authentication status
+- **Purpose**: Personalizes the experience and reinforces role-playing elements
+- **Trigger**: Displays on app initialization
+- **Progression**: Authentication sequence plays → Agent credentials appear → Clearance badge displays → Profile remains accessible in header
+- **Success criteria**: Profile feels official and classified, authentication sequence is slick, credentials are prominent
+
+## Edge Case Handling
+- **Connection Loss**: Display "SIGNAL LOST" warning overlay with reconnection countdown and fallback to cached data
+- **Critical Biometrics**: Flash red indicators and display warning messages when heart rate or stress exceeds thresholds
+- **Mission Completion**: Transition to "MISSION COMPLETE" state with summary screen and option to start new mission
+- **Data Corruption**: Show "TELEMETRY ERROR" with diagnostic codes and auto-recovery attempt
+- **Low Battery**: Display power warning when simulated watch battery drops below 20% and suggest data conservation mode
+
+## Design Direction
+The interface should evoke the feeling of classified military technology - monochromatic with tactical green and amber accents, hard edges, technical typography, subtle scan lines and CRT effects. Think encrypted communications, night vision displays, and covert operations equipment. The design should feel serious, functional, and slightly worn from field use.
+
+## Color Selection
+A military-grade tactical color scheme with phosphor green displays and amber alert indicators on a dark, near-black background.
+
+- **Primary Color**: Tactical Green (oklch(0.75 0.18 145)) - Evokes night vision and encrypted terminal displays, used for active data streams and primary readouts
+- **Secondary Colors**: 
+  - Deep Slate Background (oklch(0.15 0.01 240)) - Near-black with slight blue cast for equipment housing
+  - Muted Steel (oklch(0.45 0.02 240)) - Subdued gray for inactive elements and dividers
+- **Accent Color**: Amber Alert (oklch(0.75 0.16 75)) - High-visibility warning color for critical alerts and mission status indicators
+- **Foreground/Background Pairings**: 
+  - Background (Deep Slate #1a1d26): Tactical Green text (#88f395) - Ratio 8.2:1 ✓
+  - Background (Deep Slate #1a1d26): Amber Alert text (#f0a444) - Ratio 7.5:1 ✓
+  - Card (Darker Slate #12141a): Muted Steel text (#6b7280) - Ratio 5.1:1 ✓
+  - Primary (Tactical Green): Deep Slate text (#1a1d26) - Ratio 8.2:1 ✓
+
+## Font Selection
+Typography should communicate precision, military spec, and technological sophistication with a monospace aesthetic that reinforces the terminal/tactical device feeling.
+
+- **Typographic Hierarchy**:
+  - H1 (Section Headers): JetBrains Mono Bold/16px/tight tracking (0.02em)
+  - H2 (Data Labels): JetBrains Mono Medium/11px/wide tracking (0.08em)/uppercase
+  - Body (Metric Values): JetBrains Mono Regular/20px/tabular numbers
+  - Small (Status Text): JetBrains Mono Regular/10px/tight leading
+  - Code (Coordinates): JetBrains Mono Regular/12px/monospace digits
+
+## Animations
+Animations should feel technical and purposeful - data streams cycling, scanlines sweeping, signals pulsing. Avoid organic motion in favor of mechanical precision with occasional glitch effects for authenticity. Key moments like transmission start and alert triggers should have satisfying technological feedback.
+
+## Component Selection
+- **Components**: 
+  - Card: House each telemetry module (biometrics, location, mission) with dark backgrounds and subtle borders
+  - Badge: Display clearance level, mission phase, and threat indicators with appropriate color coding
+  - Progress: Show mission objective completion, battery level, and signal strength with linear bars
+  - Separator: Divide sections with thin tactical lines, possibly with small corner brackets
+  - Button: Transmission toggle as a prominent tactical switch with active/inactive states
+  - Alert: Critical warnings and status messages with amber/red color schemes
+- **Customizations**: 
+  - Custom digital clock display component with military time
+  - Scanline overlay effect using CSS gradients for CRT aesthetic
+  - Pulsing signal indicator for active transmission
+  - Glitch text effect for mission briefs appearing
+  - Grid coordinate reference system overlay
+- **States**: 
+  - Buttons: Default (muted green border), Hover (bright green glow), Active (solid green fill), Disabled (dark gray)
+  - Metrics: Normal (green), Elevated (amber), Critical (red pulse)
+  - Transmission: Off (gray), Connecting (amber pulse), Active (green pulse), Error (red)
+- **Icon Selection**: 
+  - Phosphor icons with weight="bold" for technical aesthetic
+  - Activity for heart rate, MapPin for location, Target for mission, Broadcast for transmission
+  - Warning for alerts, LockKey for encryption, Battery for power status
+- **Spacing**: 
+  - Tight spacing (2-3) between related data points, medium spacing (4-6) between metric groups
+  - Generous padding (6-8) inside cards for breathing room
+  - Minimal margins to maximize screen real estate on watch-sized interface
+- **Mobile**: 
+  - Design mobile-first at smartwatch dimensions (320-400px width)
+  - Stack all telemetry cards vertically for scrolling
+  - Keep critical data (biometrics, transmission status) above the fold
+  - Fixed header with agent ID and mission status always visible
+  - Larger touch targets (44px min) for button interactions on small screens
