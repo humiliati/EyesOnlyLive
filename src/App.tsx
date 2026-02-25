@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Toaster } from 'sonner'
 import { Card } from '@/components/ui/card'
@@ -33,6 +33,7 @@ import { mConsoleSync, type MConsoleBroadcast } from '@/lib/mConsoleSync'
 import { gameStateSync, type GameState } from '@/lib/gameStateSync'
 import { GameControlPanel } from '@/components/GameControlPanel'
 import { RedTeamTelemetryPanel } from '@/components/RedTeamTelemetryPanel'
+import { RedTeamManagementPanel } from '@/components/RedTeamManagementPanel'
 import { 
   Heart, 
   MapPin, 
@@ -97,7 +98,9 @@ function App() {
   const [distanceMeasurements, setDistanceMeasurements] = useKV<DistanceMeasurement[]>('distance-measurements', [])
   const [deployedRoutes, setDeployedRoutes] = useKV<PatrolRoute[]>('deployed-routes', [])
   const [mapAnnotations, setMapAnnotations] = useKV<MapAnnotation[]>('map-annotations', [])
+  const [redTeamPlayers] = useKV<import('@/components/RedTeamManagementPanel').RedTeamPlayer[]>('red-team-players', [])
   const previousOpsFeedLengthRef = useRef<number>(0)
+  const [redTeamTelemetry, setRedTeamTelemetry] = useState<import('@/lib/gameStateSync').PlayerTelemetry[]>([])
 
   const [biometrics, setBiometrics] = useState<BiometricData>({
     heartRate: 72,
@@ -716,6 +719,24 @@ function App() {
       }
     })
 
+    const unsubscribeTelemetry = gameStateSync.onTelemetryUpdate((telemetry) => {
+      if (telemetry.playerTeam === 'red') {
+        setRedTeamTelemetry((current) => {
+          const filtered = current.filter(t => t.playerId !== telemetry.playerId)
+          return [telemetry, ...filtered]
+        })
+      }
+    })
+
+    const loadRedTeamTelemetry = async () => {
+      const allTelemetry = await gameStateSync.getAllTelemetry()
+      const redTeamOnly = allTelemetry.filter(t => t.playerTeam === 'red')
+      setRedTeamTelemetry(redTeamOnly)
+    }
+
+    loadRedTeamTelemetry()
+    const telemetryInterval = setInterval(loadRedTeamTelemetry, 5000)
+
     return () => {
       mConsoleSync.stopSync()
       gameStateSync.stopSync()
@@ -723,6 +744,8 @@ function App() {
         syncUnsubscribeRef.current()
       }
       unsubscribeGameState()
+      unsubscribeTelemetry()
+      clearInterval(telemetryInterval)
     }
   }, [handleBroadcastReceived, addLogEntry])
 
@@ -1159,6 +1182,39 @@ function App() {
   const formatCoordinate = (value: number, precision: number = 6) => {
     return value.toFixed(precision)
   }
+
+  const allAssets = useMemo(() => {
+    const blueTeamAssets = assetLocations || []
+    
+    const enabledRedTeamPlayers = (redTeamPlayers || []).filter(p => p.gpsEnabled)
+    
+    const redTeamAssets: AssetLocation[] = enabledRedTeamPlayers
+      .map(player => {
+        const telemetryData = redTeamTelemetry.find(t => t.playerId === player.playerId)
+        if (!telemetryData) return null
+        
+        const gridX = Math.floor((telemetryData.longitude + 74.0060) * 100) % 8
+        const gridY = Math.floor((telemetryData.latitude - 40.7128) * 100) % 8
+        
+        return {
+          id: `red-${player.playerId}`,
+          callsign: player.callsign,
+          agentId: player.playerId,
+          gridX: Math.max(0, Math.min(7, gridX)),
+          gridY: Math.max(0, Math.min(7, gridY)),
+          latitude: telemetryData.latitude,
+          longitude: telemetryData.longitude,
+          altitude: telemetryData.altitude,
+          speed: telemetryData.speed,
+          heading: telemetryData.heading,
+          status: 'alert' as const,
+          lastUpdate: telemetryData.lastUpdate
+        } as AssetLocation
+      })
+      .filter((asset): asset is AssetLocation => asset !== null)
+    
+    return [...blueTeamAssets, ...redTeamAssets]
+  }, [assetLocations, redTeamPlayers, redTeamTelemetry])
   
   if (!missionData) return null
 
@@ -1205,11 +1261,13 @@ function App() {
               }}
             />
 
+            <RedTeamManagementPanel maxHeight="600px" />
+
             <RedTeamTelemetryPanel maxHeight="500px" />
 
             <AnnotationAckDashboard
               annotations={mapAnnotations || []}
-              assets={assetLocations || []}
+              assets={allAssets}
               maxHeight="600px"
               onRefresh={() => {
                 addLogEntry('info', 'Dashboard Refreshed', 'Annotation acknowledgment statistics updated')
@@ -1217,21 +1275,21 @@ function App() {
             />
             
             <ScenarioCreator
-              assets={assetLocations || []}
+              assets={allAssets}
               onScenarioDeployed={(scenario) => {
                 addLogEntry('mission', 'Scenario Deployed', `${scenario.name} deployed by M console`)
               }}
             />
             
             <BroadcastScheduler
-              assets={assetLocations || []}
+              assets={allAssets}
               onBroadcastScheduled={(broadcast) => {
                 addLogEntry('info', 'Broadcast Scheduled', `"${broadcast.name}" scheduled for ${broadcast.scheduleType === 'once' ? 'one-time delivery' : 'recurring delivery'}`)
               }}
             />
             
             <BroadcastTemplates
-              assets={assetLocations || []}
+              assets={allAssets}
               onBroadcastSent={(templateId, targetAgents) => {
                 addLogEntry('transmission', 'Broadcast Sent', `Template broadcast sent to ${targetAgents.length} agent(s)`)
               }}
@@ -1270,7 +1328,7 @@ function App() {
 
         <OverdueAnnotationAlerts
           annotations={mapAnnotations || []}
-          assets={assetLocations || []}
+          assets={allAssets}
           currentAgentId={agentId || 'shadow-7-alpha'}
           currentAgentCallsign={agentCallsign || 'SHADOW-7'}
           onAcknowledge={handleAcknowledgeAnnotation}
@@ -1288,7 +1346,7 @@ function App() {
         <StatusUpdate onStatusUpdate={handleStatusUpdate} agentCallsign={agentCallsign || 'SHADOW-7'} />
 
         <MissionPlanner 
-          assets={assetLocations || []}
+          assets={allAssets}
           onWaypointCreated={handleWaypointCreated}
           onMeasurementCreated={handleMeasurementCreated}
         />
@@ -1299,7 +1357,7 @@ function App() {
         />
 
         <HybridTacticalMap 
-          assets={assetLocations || []}
+          assets={allAssets}
           lanes={activeLanes || []}
           annotations={mapAnnotations || []}
           onAssetClick={(asset) => {
@@ -1312,7 +1370,7 @@ function App() {
         />
 
         <GeographicMap 
-          assets={assetLocations || []}
+          assets={allAssets}
           lanes={activeLanes || []}
           onAssetClick={(asset) => {
             addLogEntry('info', 'Asset Selected', `Viewing details for ${asset.callsign}`)
@@ -1320,7 +1378,7 @@ function App() {
         />
 
         <GlobalAssetMap 
-          assets={assetLocations || []}
+          assets={allAssets}
           onDispatchAsset={handleDispatchAsset}
           onCreateLane={handleCreateLane}
         />
