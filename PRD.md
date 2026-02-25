@@ -82,6 +82,13 @@ A covert field agent smartwatch interface that collects and transmits real-time 
 - **Progression**: User taps status button → Status posted to ops feed → Entry added to mission log → Button shows "SENT" confirmation for 3 seconds → Button re-enables
 - **Success criteria**: Status posts immediately, confirmation is clear, prevents double-taps during cooldown, high-priority statuses (alerts) use appropriate color coding
 
+### Historical Mission Log Viewer
+- **Functionality**: Comprehensive log viewer with advanced filtering by event type (critical, warning, success, mission, info, transmission, biometric, location), time range filtering (last hour, 6 hours, 24 hours, 7 days, all time), full-text search across event titles and details, and JSON export capability
+- **Purpose**: Enables M console operators to review and analyze past mission events for after-action reports, identify patterns in agent behavior, and investigate specific incidents during or after operations
+- **Trigger**: User taps "VIEW HISTORICAL LOG" button below the mission log feed
+- **Progression**: User opens historical viewer dialog → Overview stats display (total events, critical count, warning count, mission events) → User enters search terms or selects filters → Results update instantly → User scrolls through filtered timeline with date dividers → User can export filtered results as JSON → Dialog closes, returning to main interface
+- **Success criteria**: Search is instant and accurate, filters combine correctly, date dividers organize events clearly, export generates valid JSON, dialog is responsive and smooth, shows empty state with helpful message when no results match
+
 ## Edge Case Handling
 - **Connection Loss**: Display "SIGNAL LOST" warning overlay with reconnection countdown and fallback to cached data
 - **Critical Biometrics**: Flash red indicators and display warning messages when heart rate or stress exceeds thresholds

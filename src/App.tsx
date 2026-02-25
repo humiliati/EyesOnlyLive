@@ -13,6 +13,7 @@ import { QuickResponse } from '@/components/QuickResponse'
 import { StatusUpdate } from '@/components/StatusUpdate'
 import { SituationPanel } from '@/components/SituationPanel'
 import { PanicButton } from '@/components/PanicButton'
+import { HistoricalLogViewer } from '@/components/HistoricalLogViewer'
 import { soundGenerator } from '@/lib/sounds'
 import { 
   Heart, 
@@ -679,6 +680,8 @@ function App() {
         />
 
         <MissionLog entries={logEntries || []} maxHeight="350px" />
+
+        <HistoricalLogViewer entries={logEntries || []} />
 
         {batteryLevel < 20 && (
           <Card className="border-destructive bg-destructive/10 p-3">
