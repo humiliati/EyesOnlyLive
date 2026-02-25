@@ -36,6 +36,7 @@ import {
   CaretDown
 } from '@phosphor-icons/react'
 import { toast } from 'sonner'
+import { gameStateSync, type PlayerTelemetry } from '@/lib/gameStateSync'
 
 export interface AssetLocation {
   id: string
@@ -154,10 +155,44 @@ export function HybridTacticalMap({
   const [showAnnotationDialog, setShowAnnotationDialog] = useState(false)
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [redTeamTelemetry, setRedTeamTelemetry] = useState<PlayerTelemetry[]>([])
+  const [showRedTeam, setShowRedTeam] = useState(true)
+  const [showBlueTeam, setShowBlueTeam] = useState(true)
   const mapRef = useRef<SVGSVGElement>(null)
 
+  useEffect(() => {
+    const loadTelemetry = async () => {
+      const allTelemetry = await gameStateSync.getAllTelemetry()
+      const redTeamOnly = allTelemetry.filter(t => t.playerTeam === 'red')
+      setRedTeamTelemetry(redTeamOnly)
+    }
+
+    loadTelemetry()
+
+    const unsubscribe = gameStateSync.onTelemetryUpdate((update) => {
+      if (update.playerTeam === 'red') {
+        setRedTeamTelemetry((current) => {
+          const filtered = current.filter(t => t.playerId !== update.playerId)
+          return [update, ...filtered]
+        })
+      }
+    })
+
+    const refreshInterval = setInterval(loadTelemetry, 5000)
+
+    return () => {
+      unsubscribe()
+      clearInterval(refreshInterval)
+    }
+  }, [])
+
   const bounds = useMemo((): MapBounds => {
-    if (assets.length === 0) {
+    const allPositions = [
+      ...assets.map(a => ({ lat: a.latitude, lng: a.longitude })),
+      ...redTeamTelemetry.map(t => ({ lat: t.latitude, lng: t.longitude }))
+    ]
+
+    if (allPositions.length === 0) {
       return {
         minLat: 40.70,
         maxLat: 40.72,
@@ -166,8 +201,8 @@ export function HybridTacticalMap({
       }
     }
 
-    const lats = assets.map(a => a.latitude)
-    const lngs = assets.map(a => a.longitude)
+    const lats = allPositions.map(p => p.lat)
+    const lngs = allPositions.map(p => p.lng)
     
     const minLat = Math.min(...lats)
     const maxLat = Math.max(...lats)
@@ -183,7 +218,7 @@ export function HybridTacticalMap({
       minLng: minLng - lngPadding,
       maxLng: maxLng + lngPadding
     }
-  }, [assets])
+  }, [assets, redTeamTelemetry])
 
   const latLngToPixel = useCallback((lat: number, lng: number): { x: number; y: number } => {
     const latRange = bounds.maxLat - bounds.minLat
@@ -613,8 +648,28 @@ export function HybridTacticalMap({
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <div className="text-[10px] text-muted-foreground">
-              {assets.length} asset{assets.length !== 1 ? 's' : ''} | {lanes.length} lane{lanes.length !== 1 ? 's' : ''}
+            <div className="flex items-center gap-2">
+              <div className="text-[10px] text-muted-foreground">
+                {assets.length} blue | {redTeamTelemetry.length} red | {lanes.length} lane{lanes.length !== 1 ? 's' : ''}
+              </div>
+              <Button
+                size="sm"
+                variant={showBlueTeam ? "default" : "outline"}
+                onClick={() => setShowBlueTeam(!showBlueTeam)}
+                className="text-[9px] h-6 px-2"
+              >
+                <Target weight="bold" size={10} className="mr-1 text-primary" />
+                BLUE
+              </Button>
+              <Button
+                size="sm"
+                variant={showRedTeam ? "default" : "outline"}
+                onClick={() => setShowRedTeam(!showRedTeam)}
+                className="text-[9px] h-6 px-2"
+              >
+                <Target weight="bold" size={10} className="mr-1 text-destructive" />
+                RED
+              </Button>
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -1035,7 +1090,7 @@ export function HybridTacticalMap({
                 </g>
               )}
 
-              {assets.map(asset => {
+              {showBlueTeam && assets.map(asset => {
                 const pos = latLngToPixel(asset.latitude, asset.longitude)
                 const isHovered = hoveredAsset === asset.id
                 const isSelected = selectedAsset?.id === asset.id
@@ -1121,6 +1176,77 @@ export function HybridTacticalMap({
                         </text>
                       </g>
                     )}
+                  </g>
+                )
+              })}
+
+              {showRedTeam && redTeamTelemetry.map(player => {
+                const pos = latLngToPixel(player.latitude, player.longitude)
+                const isStale = Date.now() - player.lastUpdate > 30000
+                const redColor = 'oklch(0.65 0.25 25)'
+
+                return (
+                  <g
+                    key={player.playerId}
+                    className="cursor-pointer"
+                    style={{ pointerEvents: 'all', opacity: isStale ? 0.5 : 1 }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toast.info(`Red Team: ${player.playerCallsign}`)
+                    }}
+                  >
+                    <circle
+                      cx={pos.x}
+                      cy={pos.y}
+                      r="14"
+                      fill={redColor}
+                      opacity="0.1"
+                      className="animate-pulse"
+                    />
+
+                    <circle
+                      cx={pos.x}
+                      cy={pos.y}
+                      r="6"
+                      fill={redColor}
+                      stroke="oklch(0.15 0.01 240)"
+                      strokeWidth="2"
+                      filter="url(#glow)"
+                    />
+
+                    {player.heading !== undefined && (
+                      <line
+                        x1={pos.x}
+                        y1={pos.y}
+                        x2={pos.x + Math.sin((player.heading * Math.PI) / 180) * 12}
+                        y2={pos.y - Math.cos((player.heading * Math.PI) / 180) * 12}
+                        stroke={redColor}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        opacity="0.8"
+                      />
+                    )}
+
+                    <rect
+                      x={pos.x + 12}
+                      y={pos.y - 8}
+                      width={player.playerCallsign.length * 5 + 8}
+                      height="16"
+                      fill="oklch(0.11 0.01 240)"
+                      stroke={redColor}
+                      strokeWidth="1"
+                      rx="2"
+                    />
+                    <text
+                      x={pos.x + 16}
+                      y={pos.y + 2}
+                      fill={redColor}
+                      fontSize="10"
+                      fontWeight="bold"
+                      fontFamily="JetBrains Mono, monospace"
+                    >
+                      {player.playerCallsign}
+                    </text>
                   </g>
                 )
               })}
