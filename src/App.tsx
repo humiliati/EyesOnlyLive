@@ -8,6 +8,9 @@ import { Separator } from '@/components/ui/separator'
 import { MissionLog, type LogEntry } from '@/components/MissionLog'
 import { MPing, type PingMessage } from '@/components/MPing'
 import { OperationsFeed, type OpsFeedEntry } from '@/components/OperationsFeed'
+import { QuickResponse } from '@/components/QuickResponse'
+import { StatusUpdate } from '@/components/StatusUpdate'
+import { SituationPanel } from '@/components/SituationPanel'
 import { soundGenerator } from '@/lib/sounds'
 import { 
   Heart, 
@@ -129,6 +132,28 @@ function App() {
       return readList
     })
   }, [setReadOpsFeedEntries])
+
+  const handleQuickResponse = useCallback((response: string, category: string) => {
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: 'transmission',
+      message: `Response to M: ${response}`,
+      priority: 'normal'
+    })
+    addLogEntry('transmission', 'Response Sent to M', response)
+  }, [addOpsFeedEntry, addLogEntry, agentCallsign, agentId])
+
+  const handleStatusUpdate = useCallback((status: string, type: string) => {
+    addOpsFeedEntry({
+      agentCallsign: agentCallsign || 'SHADOW-7',
+      agentId: agentId || 'shadow-7-alpha',
+      type: type as OpsFeedEntry['type'],
+      message: status,
+      priority: type === 'alert' ? 'high' : 'normal'
+    })
+    addLogEntry(type as LogEntry['type'], 'Status Updated', status)
+  }, [addOpsFeedEntry, addLogEntry, agentCallsign, agentId])
 
   useEffect(() => {
     if (currentPing && !currentPing.acknowledged) {
@@ -396,6 +421,12 @@ function App() {
     }
   }
 
+  const getBiometricStatus = (): 'normal' | 'elevated' | 'critical' => {
+    if (biometrics.heartRate > 140 || biometrics.stressLevel > 80) return 'critical'
+    if (biometrics.heartRate > 120 || biometrics.stressLevel > 60) return 'elevated'
+    return 'normal'
+  }
+
   const formatTime = (date: Date) => {
     return date.toTimeString().slice(0, 8)
   }
@@ -425,7 +456,19 @@ function App() {
           </div>
         </header>
 
+        <SituationPanel 
+          missionProgress={missionData.progress}
+          threatLevel={missionData.threatLevel}
+          unreadAlerts={(opsFeedEntries || []).filter(e => !(readOpsFeedEntries || []).includes(e.id) && e.agentId !== agentId).length}
+          teamSize={4}
+          biometricStatus={getBiometricStatus()}
+        />
+
         <MPing ping={currentPing || null} onAcknowledge={handleAcknowledgePing} />
+
+        <QuickResponse onSendResponse={handleQuickResponse} agentCallsign={agentCallsign || 'SHADOW-7'} />
+
+        <StatusUpdate onStatusUpdate={handleStatusUpdate} agentCallsign={agentCallsign || 'SHADOW-7'} />
 
         <Card className="border-primary/30 p-4 space-y-3">
           <div className="flex items-center justify-between">

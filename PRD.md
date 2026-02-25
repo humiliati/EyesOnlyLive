@@ -61,6 +61,27 @@ A covert field agent smartwatch interface that collects and transmits real-time 
 - **Progression**: New agent activity posted → Unread count badge appears with pulsing animation → Red dot indicators mark specific unread entries → User scrolls to view entry → Entry auto-marks as read after 500ms in viewport → Badge count decrements → All indicators cleared when fully caught up
 - **Success criteria**: Badge shows accurate unread count, individual entries clearly marked as unread, smooth auto-read detection, animations grab attention without being distracting, read state persists between sessions
 
+### Situation Awareness Panel
+- **Functionality**: Condensed at-a-glance dashboard showing mission progress, threat level, unread alerts count, and biometric status in a compact 4-column layout
+- **Purpose**: Provides instant situational awareness without scrolling, allowing M console operators to rapidly assess agent status during live exercises
+- **Trigger**: Displays immediately below header on app load
+- **Progression**: Page loads → Panel appears with current metrics → Values update in real-time → Critical conditions trigger color changes and animations → Panel persists during scroll
+- **Success criteria**: All key metrics visible at once, color coding is instantly recognizable, updates smoothly without flicker, critical alerts are unmissable
+
+### Quick Response System
+- **Functionality**: Pre-configured response buttons organized by category (Status, Commands, Intel, Tactical) that send standardized messages back to M console with one tap
+- **Purpose**: Enables rapid communication during high-pressure situations, reducing time to acknowledge directives and report status
+- **Trigger**: User taps to select category, then taps specific response
+- **Progression**: User opens Quick Response → Selects category (Status/Commands/Intel/Tactical) → Views 6 pre-configured responses → Taps response → Message immediately posted to ops feed and mission log → Confirmation shown → Can send another
+- **Success criteria**: Responses send instantly, messages appear in both ops feed and mission log, visual feedback confirms transmission, no accidental double-sends
+
+### Quick Status Updates
+- **Functionality**: One-tap status buttons with icons for common field updates (Position secure, Moving to target, Target acquired, Package secured, Area clear, Eyes on target, Contact detected, Need support)
+- **Purpose**: Allows agents to push critical status changes to M console instantly without typing, maintaining operational tempo
+- **Trigger**: User taps any status button
+- **Progression**: User taps status button → Status posted to ops feed → Entry added to mission log → Button shows "SENT" confirmation for 3 seconds → Button re-enables
+- **Success criteria**: Status posts immediately, confirmation is clear, prevents double-taps during cooldown, high-priority statuses (alerts) use appropriate color coding
+
 ## Edge Case Handling
 - **Connection Loss**: Display "SIGNAL LOST" warning overlay with reconnection countdown and fallback to cached data
 - **Critical Biometrics**: Flash red indicators and display warning messages when heart rate or stress exceeds thresholds
