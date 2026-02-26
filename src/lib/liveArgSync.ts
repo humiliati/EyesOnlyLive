@@ -150,11 +150,49 @@ class LiveArgSyncManager {
   }
 
   async createDeadDrop(drop: Omit<DeadDropLocation, 'id' | 'createdAt' | 'status'>): Promise<DeadDropLocation> {
-    // NOTE: EyesOnly currently creates/retrieves dead drops via Ops actor endpoints
-    // (/api/ops/dead-drop) and M mode only lists them.
-    // Until we add a director-authority dead-drop create endpoint, keep Spark KV behavior
-    // for offline/simulated runs.
     try {
+      // Prefer live EyesOnly director create endpoint when session is present.
+      if (this._eyesOnlyBaseUrl && this._mToken) {
+        // NOTE: EyesOnly dead drops are lane-based today. We approximate lane_id
+        // from gridX (A/B/C...) until we introduce an explicit lane picker.
+        const laneId = String.fromCharCode(65 + (drop.gridX || 0));
+        const res = await this._mFetch('/api/m/dead-drop', {
+          method: 'POST',
+          body: JSON.stringify({
+            scenario_id: this._scenarioId,
+            lane_id: laneId,
+            label: drop.name || 'Dead Drop',
+            lat: drop.latitude,
+            lng: drop.longitude,
+          }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({} as any)) as any
+          throw new Error(d?.message || `EyesOnly dead drop create failed (${res.status})`)
+        }
+        const d = await res.json().catch(() => ({} as any)) as any
+        const dd = d?.dead_drop || d?.drop
+
+        const created: DeadDropLocation = {
+          id: String(dd?.id),
+          name: String(dd?.label || drop.name || 'Dead Drop'),
+          gridX: drop.gridX || 0,
+          gridY: drop.gridY || 0,
+          latitude: dd?.lat ?? drop.latitude ?? 0,
+          longitude: dd?.lng ?? drop.longitude ?? 0,
+          items: drop.items || [],
+          discoveredBy: [],
+          createdBy: drop.createdBy || 'M',
+          createdAt: dd?.created_at || Date.now(),
+          status: 'active',
+          metadata: { lane_id: dd?.lane_id, dead_drop_id: dd?.id },
+        }
+
+        this._notifyDeadDropListeners(await this.getDeadDrops())
+        return created
+      }
+
+      // Fallback: Spark KV
       const newDrop: DeadDropLocation = {
         id: `DROP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         createdAt: Date.now(),
@@ -319,6 +357,18 @@ class LiveArgSyncManager {
 
   async deleteDeadDrop(dropId: string): Promise<void> {
     try {
+      // Prefer live EyesOnly director delete endpoint when session is present.
+      if (this._eyesOnlyBaseUrl && this._mToken) {
+        const res = await this._mFetch(`/api/m/dead-drop/${encodeURIComponent(dropId)}`, { method: 'DELETE' })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({} as any)) as any
+          throw new Error(d?.message || `EyesOnly dead drop delete failed (${res.status})`)
+        }
+        this._notifyDeadDropListeners(await this.getDeadDrops())
+        return
+      }
+
+      // Fallback: Spark KV
       await spark.kv.delete(`dead-drop:${dropId}`)
       this._notifyDeadDropListeners(await this.getDeadDrops())
     } catch (error) {

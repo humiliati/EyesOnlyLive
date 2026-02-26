@@ -48,7 +48,7 @@ export function DeadDropManager({
   autoFillLocation
 }: DeadDropManagerProps) {
   const eyesOnlyConnected = typeof window !== 'undefined' && !!(window as any).__EYESONLY_M_TOKEN__
-  const eyesOnlyReadOnly = eyesOnlyConnected // until /api/m gets a create endpoint
+  const eyesOnlyReadOnly = false // director create/delete now supported via /api/m/dead-drop
 
   const [drops, setDrops] = useState<DeadDropLocation[]>([])
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
