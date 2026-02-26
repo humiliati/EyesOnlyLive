@@ -2,7 +2,10 @@ export type Persona = 'director' | 'ops' | 'player'
 
 export interface DirectorSession {
   persona: 'director'
+  /** API origin, e.g. https://flapsandseals.com */
   baseUrl: string
+  /** Human-facing portal URL, e.g. https://flapsandseals.com/m */
+  portalUrl?: string
   token: string
   callsign: string
   scenarioId: number
@@ -11,6 +14,7 @@ export interface DirectorSession {
 export interface OpsSession {
   persona: 'ops'
   baseUrl: string
+  portalUrl?: string
   token: string
   callsign: string
   actor?: any
@@ -19,6 +23,7 @@ export interface OpsSession {
 export interface PlayerSession {
   persona: 'player'
   baseUrl: string
+  portalUrl?: string
   token?: string
   playerId?: string
 }
@@ -60,7 +65,20 @@ export function normalizeBaseUrl(url: string): string {
   return url
 }
 
-export async function directorLogin(baseUrl: string, callsign: string, password: string, scenarioId: number): Promise<DirectorSession> {
+export function apiBaseFromPortalUrl(portalUrl: string): string {
+  const u = new URL(normalizeBaseUrl(portalUrl))
+  return u.origin
+}
+
+export function portalUrlFromBase(baseUrl: string, persona: Persona): string {
+  const origin = apiBaseFromPortalUrl(baseUrl)
+  if (persona === 'director') return origin + '/m'
+  if (persona === 'ops') return origin + '/ops'
+  return origin
+}
+
+export async function directorLogin(portalUrl: string, callsign: string, password: string, scenarioId: number): Promise<DirectorSession> {
+  const baseUrl = apiBaseFromPortalUrl(portalUrl)
   const res = await fetch(`${baseUrl}/api/m/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -73,10 +91,11 @@ export async function directorLogin(baseUrl: string, callsign: string, password:
   const d = await res.json() as any
   const token = d.token || d.access_token || d.session?.token
   if (!token) throw new Error('Director login did not return a token')
-  return { persona: 'director', baseUrl, token, callsign, scenarioId }
+  return { persona: 'director', baseUrl, portalUrl, token, callsign, scenarioId }
 }
 
-export async function opsJoin(baseUrl: string, joinCode: string, callsign: string): Promise<OpsSession> {
+export async function opsJoin(portalUrl: string, joinCode: string, callsign: string): Promise<OpsSession> {
+  const baseUrl = apiBaseFromPortalUrl(portalUrl)
   const res = await fetch(`${baseUrl}/api/join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -89,5 +108,5 @@ export async function opsJoin(baseUrl: string, joinCode: string, callsign: strin
   const d = await res.json() as any
   const token = d.token
   if (!token) throw new Error('Ops join did not return a token')
-  return { persona: 'ops', baseUrl, token, callsign, actor: d.actor }
+  return { persona: 'ops', baseUrl, portalUrl, token, callsign, actor: d.actor }
 }

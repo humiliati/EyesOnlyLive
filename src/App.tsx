@@ -2469,7 +2469,7 @@ function App() {
   const [persona, setPersona] = useState<Persona>('director')
   const [baseUrl, setBaseUrl] = useState<string>(() => {
     const s = loadSession()
-    return s?.baseUrl || 'https://flapsandseals.com'
+    return (s as any)?.portalUrl || 'https://flapsandseals.com/m'
   })
   const [callsign, setCallsign] = useState('')
   const [password, setPassword] = useState('')
@@ -2480,6 +2480,7 @@ function App() {
   useEffect(() => {
     // Expose config for libs (incremental migration away from spark.kv).
     if (session?.baseUrl) (window as any).__EYESONLY_BASE_URL__ = session.baseUrl
+    if ((session as any)?.portalUrl) (window as any).__EYESONLY_PORTAL_URL__ = (session as any).portalUrl
     if (session?.persona === 'director') {
       ;(window as any).__EYESONLY_M_TOKEN__ = session.token
       ;(window as any).__EYESONLY_SCENARIO_ID__ = session.scenarioId
@@ -2498,25 +2499,25 @@ function App() {
   }, [])
 
   const doLogin = useCallback(async () => {
-    const b = normalizeBaseUrl(baseUrl)
-    if (!b) { toast.error('Set EyesOnly Base URL'); return }
+    const portal = normalizeBaseUrl(baseUrl)
+    if (!portal) { toast.error('Set EyesOnly Portal URL'); return }
 
     setAuthBusy(true)
     try {
       if (persona === 'director') {
         const sId = parseInt(scenarioId, 10) || 1
-        const s = await directorLogin(b, callsign.trim(), password, sId)
+        const s = await directorLogin(portal, callsign.trim(), password, sId)
         saveSession(s)
         setSession(s)
         toast.success('Director session established')
       } else if (persona === 'ops') {
-        const s = await opsJoin(b, joinCode.trim(), callsign.trim())
+        const s = await opsJoin(portal, joinCode.trim(), callsign.trim())
         saveSession(s)
         setSession(s)
         toast.success('Ops session established')
       } else {
         // Player mode: scaffold only (we'll wire to EyesOnly player auth once confirmed)
-        const s: EySession = { persona: 'player', baseUrl: b }
+        const s: EySession = { persona: 'player', baseUrl: new URL(portal).origin, portalUrl: portal }
         saveSession(s)
         setSession(s)
         toast.success('Player mode (stub)')
