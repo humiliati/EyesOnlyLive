@@ -48,6 +48,11 @@ class GameStateSync {
   private syncInterval: number | null = null
   private lastSyncTimestamp: number = 0
 
+  private ws: WebSocket | null = null
+  private wsRetryMs: number = 1500
+  private wsRetryTimer: number | null = null
+  private lastWsRefreshAt: number = 0
+
   private get _eyesOnlyBaseUrl(): string | null {
     return (window as any).__EYESONLY_BASE_URL__ || null
   }
@@ -81,6 +86,18 @@ class GameStateSync {
       this.stopSync()
     }
 
+    // EyesOnly mode: prefer WebSocket-driven refresh + slower polling fallback.
+    if (this._usingEyesOnly) {
+      this._startWs()
+      const slowMs = Math.max(2500, pollIntervalMs)
+      this.syncInterval = window.setInterval(() => {
+        this.checkForUpdates()
+      }, slowMs)
+      this.checkForUpdates()
+      return
+    }
+
+    // Spark KV fallback polling
     this.syncInterval = window.setInterval(() => {
       this.checkForUpdates()
     }, pollIntervalMs)
@@ -92,6 +109,17 @@ class GameStateSync {
     if (this.syncInterval) {
       clearInterval(this.syncInterval)
       this.syncInterval = null
+    }
+
+    if (this.wsRetryTimer) {
+      clearTimeout(this.wsRetryTimer)
+      this.wsRetryTimer = null
+    }
+
+    if (this.ws) {
+      try { this.ws.onopen = null; this.ws.onclose = null; this.ws.onmessage = null; this.ws.onerror = null } catch {}
+      try { this.ws.close() } catch {}
+      this.ws = null
     }
   }
 
@@ -114,6 +142,53 @@ class GameStateSync {
     return () => {
       this.pingStatusHandlers.delete(handler)
     }
+  }
+
+  private _startWs(): void {
+    if (!this._usingEyesOnly) return
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return
+
+    const base = this._eyesOnlyBaseUrl!
+    const token = this._mToken!
+    const wsUrl = base.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:') + `/api/m/ws?token=${encodeURIComponent(token)}`
+
+    try {
+      this.ws = new WebSocket(wsUrl)
+    } catch (e) {
+      this._scheduleWsRetry()
+      return
+    }
+
+    this.ws.onopen = () => {
+      this.wsRetryMs = 1500
+    }
+
+    this.ws.onclose = () => {
+      this.ws = null
+      this._scheduleWsRetry()
+    }
+
+    this.ws.onerror = () => {
+      // onclose will handle retry
+    }
+
+    this.ws.onmessage = (ev) => {
+      // Any realtime message means the world changed; refresh state.
+      const now = Date.now()
+      if (now - this.lastWsRefreshAt < 350) return
+      this.lastWsRefreshAt = now
+      this.checkForUpdates().catch(() => {})
+    }
+  }
+
+  private _scheduleWsRetry(): void {
+    if (this.wsRetryTimer) return
+    const delay = this.wsRetryMs
+    this.wsRetryMs = Math.min(15_000, Math.floor(this.wsRetryMs * 1.6))
+    this.wsRetryTimer = window.setTimeout(() => {
+      this.wsRetryTimer = null
+      this._startWs()
+    }, delay)
   }
 
   private async checkForUpdates(): Promise<void> {
