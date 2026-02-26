@@ -46,6 +46,10 @@ class LiveArgSyncManager {
   private get _mToken(): string | null {
     return (window as any).__EYESONLY_M_TOKEN__ || null
   }
+
+  private get _opsToken(): string | null {
+    return (window as any).__EYESONLY_OPS_TOKEN__ || null
+  }
   private get _scenarioId(): number {
     return parseInt(String((window as any).__EYESONLY_SCENARIO_ID__ || '1'), 10) || 1
   }
@@ -54,6 +58,20 @@ class LiveArgSyncManager {
     const base = this._eyesOnlyBaseUrl
     const token = this._mToken
     if (!base || !token) throw new Error('Missing EyesOnly director session (baseUrl/token)')
+    return fetch(`${base}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.headers || {}),
+      },
+    })
+  }
+
+  private async _opsFetch(path: string, opts: RequestInit = {}): Promise<Response> {
+    const base = this._eyesOnlyBaseUrl
+    const token = this._opsToken
+    if (!base || !token) throw new Error('Missing EyesOnly ops session (baseUrl/token)')
     return fetch(`${base}${path}`, {
       ...opts,
       headers: {
@@ -322,6 +340,12 @@ class LiveArgSyncManager {
 
   async discoverDeadDrop(dropId: string, agentId: string, code?: string): Promise<boolean> {
     try {
+      // Ops: "discover" is not a first-class server action (ops places/retrieves by lane).
+      // Treat discover as a no-op success when connected.
+      if (this._eyesOnlyBaseUrl && this._opsToken) {
+        return true
+      }
+
       const drop = await spark.kv.get<DeadDropLocation>(`dead-drop:${dropId}`)
       if (!drop) {
         throw new Error(`Dead drop ${dropId} not found`)
@@ -360,6 +384,28 @@ class LiveArgSyncManager {
 
   async retrieveDeadDrop(dropId: string, agentId: string): Promise<RogueItem[]> {
     try {
+      // Ops: retrieving a dead drop is lane-based on the server.
+      if (this._eyesOnlyBaseUrl && this._opsToken) {
+        const stRes = await this._opsFetch('/api/ops/status')
+        if (!stRes.ok) throw new Error(`Ops status failed (${stRes.status})`)
+        const st = await stRes.json().catch(() => ({} as any)) as any
+        const laneId = st?.actor?.lane_id
+        if (!laneId) throw new Error('Ops actor has no lane_id (cannot retrieve dead drop)')
+
+        const res = await this._opsFetch('/api/ops/dead-drop', {
+          method: 'POST',
+          body: JSON.stringify({ lane_id: laneId, label: 'Dead Drop', action: 'retrieve' }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({} as any)) as any
+          throw new Error(d?.message || `Dead drop retrieve failed (${res.status})`)
+        }
+
+        // Server dead drops don't carry item payloads yet.
+        this._notifyDeadDropListeners(await this.getDeadDrops())
+        return []
+      }
+
       const drop = await spark.kv.get<DeadDropLocation>(`dead-drop:${dropId}`)
       if (!drop) {
         throw new Error(`Dead drop ${dropId} not found`)
