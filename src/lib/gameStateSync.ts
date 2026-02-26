@@ -59,6 +59,9 @@ class GameStateSync {
   private get _mToken(): string | null {
     return (window as any).__EYESONLY_M_TOKEN__ || null
   }
+  private get _opsToken(): string | null {
+    return (window as any).__EYESONLY_OPS_TOKEN__ || null
+  }
   private get _scenarioId(): number {
     return parseInt(String((window as any).__EYESONLY_SCENARIO_ID__ || '1'), 10) || 1
   }
@@ -77,8 +80,26 @@ class GameStateSync {
     })
   }
 
-  private get _usingEyesOnly(): boolean {
+  private async _opsFetch(path: string, opts: RequestInit = {}): Promise<Response> {
+    const base = this._eyesOnlyBaseUrl
+    const token = this._opsToken
+    if (!base || !token) throw new Error('Missing EyesOnly ops session (baseUrl/token)')
+    return fetch(`${base}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.headers || {}),
+      },
+    })
+  }
+
+  private get _usingEyesOnlyM(): boolean {
     return !!(this._eyesOnlyBaseUrl && this._mToken)
+  }
+
+  private get _usingEyesOnlyOps(): boolean {
+    return !!(this._eyesOnlyBaseUrl && this._opsToken)
   }
 
   startSync(pollIntervalMs: number = 1000): void {
@@ -87,7 +108,7 @@ class GameStateSync {
     }
 
     // EyesOnly mode: prefer WebSocket-driven refresh + slower polling fallback.
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyM || this._usingEyesOnlyOps) {
       this._startWs()
       const slowMs = Math.max(2500, pollIntervalMs)
       this.syncInterval = window.setInterval(() => {
@@ -145,12 +166,14 @@ class GameStateSync {
   }
 
   private _startWs(): void {
-    if (!this._usingEyesOnly) return
+    if (!(this._usingEyesOnlyM || this._usingEyesOnlyOps)) return
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return
 
     const base = this._eyesOnlyBaseUrl!
-    const token = this._mToken!
-    const wsUrl = base.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:') + `/api/m/ws?token=${encodeURIComponent(token)}`
+    const isOps = this._usingEyesOnlyOps && !this._usingEyesOnlyM
+    const token = isOps ? this._opsToken! : this._mToken!
+    const path = isOps ? '/api/ops/ws' : '/api/m/ws'
+    const wsUrl = base.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:') + `${path}?token=${encodeURIComponent(token)}`
 
     try {
       this.ws = new WebSocket(wsUrl)
@@ -211,7 +234,18 @@ class GameStateSync {
   }
 
   async getGameState(): Promise<GameState> {
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyOps) {
+      const res = await this._opsFetch('/api/ops/status')
+      if (!res.ok) throw new Error(`EyesOnly ops status fetch failed (${res.status})`)
+      const data = await res.json().catch(() => ({} as any)) as any
+      return {
+        frozen: !!data?.scenario?.frozen,
+        freezeReason: data?.scenario?.frozen ? 'FROZEN' : undefined,
+        emergencyPanicActive: false,
+      }
+    }
+
+    if (this._usingEyesOnlyM) {
       // Frozen state is exposed on the grid cells response.
       const res = await this._mFetch(`/api/m/grid/${this._scenarioId}/cells`)
       if (!res.ok) throw new Error(`EyesOnly grid state fetch failed (${res.status})`)
@@ -256,7 +290,12 @@ class GameStateSync {
   }
 
   async setGameState(state: GameState): Promise<void> {
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyOps) {
+      // Ops cannot set scenario frozen state.
+      return
+    }
+
+    if (this._usingEyesOnlyM) {
       // Only frozen is a first-class state toggle in EyesOnly.
       if (typeof state.frozen !== 'undefined') {
         await this._mFetch('/api/m/scenario/freeze', {
@@ -346,7 +385,7 @@ class GameStateSync {
       panicTimestamp: Date.now()
     }
 
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyM) {
       // Freeze scenario + insert director panic marker.
       await this._mFetch('/api/m/scenario/freeze', {
         method: 'POST',
@@ -385,7 +424,12 @@ class GameStateSync {
   }
 
   async getAllTelemetry(): Promise<PlayerTelemetry[]> {
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyOps) {
+      // Ops doesn't need all telemetry; return empty.
+      return []
+    }
+
+    if (this._usingEyesOnlyM) {
       const res = await this._mFetch(`/api/m/actors/positions/${this._scenarioId}`)
       if (!res.ok) throw new Error(`EyesOnly telemetry fetch failed (${res.status})`)
       const data = await res.json().catch(() => ({} as any)) as any
@@ -438,6 +482,16 @@ class GameStateSync {
   }
 
   async acknowledgePing(pingId: string): Promise<void> {
+    if (this._usingEyesOnlyOps) {
+      const idNum = parseInt(String(pingId), 10)
+      if (!idNum) return
+      await this._opsFetch('/api/ops/ack', {
+        method: 'POST',
+        body: JSON.stringify({ ping_event_id: idNum }),
+      })
+      return
+    }
+
     const key = `${this.kvPrefix}:ping:${pingId}`
     const ping = await window.spark.kv.get<UnacknowledgedPing>(key)
     if (ping) {
@@ -447,7 +501,28 @@ class GameStateSync {
   }
 
   async getOverduePings(): Promise<UnacknowledgedPing[]> {
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyOps) {
+      const res = await this._opsFetch('/api/ops/pings')
+      if (!res.ok) throw new Error(`EyesOnly ops pings fetch failed (${res.status})`)
+      const data = await res.json().catch(() => ({} as any)) as any
+      const pings = Array.isArray(data?.pings) ? data.pings : []
+      const now = Date.now()
+      return pings.map((p: any) => {
+        const payload = p.payload || {}
+        const issuedAt = p.created_at ? new Date(p.created_at).getTime() : Number(payload.sent_at || Date.now())
+        const timeoutMs = 30_000
+        return {
+          pingId: String(p.id),
+          targetAgentId: String(payload.target_actor_id || ''),
+          targetCallsign: String(payload.target_callsign || ''),
+          issuedAt,
+          timeoutMs,
+          acknowledged: !!p.acked,
+        } as UnacknowledgedPing
+      }).filter((pp: UnacknowledgedPing) => !pp.acknowledged && (now - pp.issuedAt) > pp.timeoutMs)
+    }
+
+    if (this._usingEyesOnlyM) {
       const res = await this._mFetch(`/api/m/pings/${this._scenarioId}?limit=80`)
       if (!res.ok) throw new Error(`EyesOnly pings fetch failed (${res.status})`)
       const data = await res.json().catch(() => ({} as any)) as any
