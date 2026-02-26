@@ -1,4 +1,5 @@
-import { ReactNode, useState } from 'react'
+import { ReactNode, useState, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { CaretDown, DotsSixVertical } from '@phosphor-icons/react'
@@ -38,15 +39,26 @@ export function DraggableDataCard({
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed)
   const [isDragHover, setIsDragHover] = useState(false)
   const [touchStartY, setTouchStartY] = useState<number | null>(null)
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  const [isDragCancelled, setIsDragCancelled] = useState(false)
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/html', e.currentTarget.innerHTML)
+    const rect = e.currentTarget.getBoundingClientRect()
+    dragStartPosRef.current = { x: rect.left, y: rect.top }
+    setIsDragCancelled(false)
     if (onDragStart) onDragStart(id)
   }
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (e: React.DragEvent) => {
     setIsDragHover(false)
+    
+    if (e.dataTransfer.dropEffect === 'none') {
+      setIsDragCancelled(true)
+      setTimeout(() => setIsDragCancelled(false), 400)
+    }
+    
     if (onDragEnd) onDragEnd()
   }
 
@@ -101,10 +113,29 @@ export function DraggableDataCard({
 
   const handleTouchEnd = () => {
     setTouchStartY(null)
+    
+    const wasDragging = touchStartY !== null
+    if (wasDragging && !isDragTarget) {
+      setIsDragCancelled(true)
+      setTimeout(() => setIsDragCancelled(false), 400)
+    }
+    
     if (onDragEnd) onDragEnd()
   }
 
   return (
+    <motion.div
+      animate={isDragCancelled ? {
+        scale: [0.95, 1.02, 1],
+        opacity: [0.6, 1]
+      } : {}}
+      transition={{
+        type: "spring",
+        stiffness: 400,
+        damping: 25,
+        duration: 0.4
+      }}
+    >
     <Card
       data-draggable-card={id}
       draggable
@@ -174,5 +205,6 @@ export function DraggableDataCard({
         </>
       )}
     </Card>
+    </motion.div>
   )
 }

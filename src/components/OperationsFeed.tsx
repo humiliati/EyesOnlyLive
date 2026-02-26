@@ -63,6 +63,8 @@ export function OperationsFeed({
   const [touchActive, setTouchActive] = useState(false)
   const [ghostPosition, setGhostPosition] = useState<{ x: number; y: number } | null>(null)
   const ghostRef = useRef<HTMLDivElement>(null)
+  const [isDragCancelled, setIsDragCancelled] = useState(false)
+  const wasDragTargetRef = useRef<boolean>(false)
 
   useEffect(() => {
     if (entries.length > prevEntriesLength.current && scrollRef.current) {
@@ -219,24 +221,50 @@ export function OperationsFeed({
 
   const handleTouchEnd = () => {
     if (isTouchDragging.current) {
+      if (!wasDragTargetRef.current) {
+        setIsDragCancelled(true)
+        setTimeout(() => setIsDragCancelled(false), 400)
+      }
       onDragEnd?.()
       isTouchDragging.current = false
     }
+    wasDragTargetRef.current = false
     setTouchActive(false)
     setGhostPosition(null)
   }
+
+  wasDragTargetRef.current = isDragTarget
 
   return (
     <>
     <motion.div
       layout
       initial={false}
+      animate={isDragCancelled ? {
+        scale: [0.98, 1.02, 1],
+        opacity: [0.7, 1],
+        rotate: [0, 1, -1, 0]
+      } : {}}
       transition={{
         layout: {
           type: "spring",
           stiffness: 300,
           damping: 30,
           mass: 0.8
+        },
+        scale: {
+          type: "spring",
+          stiffness: 400,
+          damping: 20,
+          duration: 0.4
+        },
+        opacity: {
+          duration: 0.3
+        },
+        rotate: {
+          type: "spring",
+          stiffness: 500,
+          damping: 25
         }
       }}
     >
@@ -250,9 +278,15 @@ export function OperationsFeed({
         draggable
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move'
+          wasDragTargetRef.current = false
           onDragStart?.('operations-feed')
         }}
-        onDragEnd={() => {
+        onDragEnd={(e) => {
+          if (e.dataTransfer.dropEffect === 'none' || !wasDragTargetRef.current) {
+            setIsDragCancelled(true)
+            setTimeout(() => setIsDragCancelled(false), 400)
+          }
+          wasDragTargetRef.current = false
           onDragEnd?.()
         }}
         onDragOver={(e) => {
