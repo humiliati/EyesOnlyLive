@@ -82,6 +82,30 @@ class MConsoleSync {
   private syncInterval: number | null = null
   private lastSyncTimestamp: number = 0
 
+  private get _eyesOnlyBaseUrl(): string | null {
+    return (window as any).__EYESONLY_BASE_URL__ || null
+  }
+  private get _mToken(): string | null {
+    return (window as any).__EYESONLY_M_TOKEN__ || null
+  }
+  private get _scenarioId(): number {
+    return parseInt(String((window as any).__EYESONLY_SCENARIO_ID__ || '1'), 10) || 1
+  }
+
+  private async _mFetch(path: string, opts: RequestInit = {}): Promise<Response> {
+    const base = this._eyesOnlyBaseUrl
+    const token = this._mToken
+    if (!base || !token) throw new Error('Missing EyesOnly director session (baseUrl/token)')
+    return fetch(`${base}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.headers || {}),
+      },
+    })
+  }
+
   startSync(pollIntervalMs: number = 2000): void {
     if (this.syncInterval) {
       this.stopSync()
@@ -127,11 +151,36 @@ class MConsoleSync {
   }
 
   private async fetchBroadcastsSince(timestamp: number): Promise<MConsoleBroadcast[]> {
+    // Prefer live EyesOnly M events when director session is present.
+    if (this._eyesOnlyBaseUrl && this._mToken) {
+      const res = await this._mFetch(`/api/m/events/${this._scenarioId}?limit=120`)
+      if (!res.ok) throw new Error(`EyesOnly events fetch failed (${res.status})`)
+      const data = await res.json().catch(() => ({} as any)) as any
+      const events = Array.isArray(data?.events) ? data.events : (Array.isArray(data) ? data : [])
+
+      const mapped: MConsoleBroadcast[] = events.map((ev: any) => {
+        const ts = ev.created_at ? new Date(ev.created_at).getTime() : (ev.timestamp || ev.createdAt || Date.now())
+        const type = (ev.event_type || ev.type || 'general') as any
+        return {
+          id: String(ev.id || ev.event_id || `${ts}-${Math.random().toString(36).slice(2)}`),
+          type,
+          payload: ev.payload || ev.data || {},
+          timestamp: ts,
+          broadcastBy: String(ev.actor_callsign || ev.from || ev.created_by || 'M'),
+        }
+      })
+
+      return mapped
+        .filter((b) => b.timestamp > timestamp)
+        .sort((a, b) => a.timestamp - b.timestamp)
+    }
+
+    // Fallback: Spark KV simulation
     const allKeys = await window.spark.kv.keys()
     const broadcastKeys = allKeys.filter((key: string) => key.startsWith(`${this.kvPrefix}:broadcast:`))
-    
+
     const broadcasts: MConsoleBroadcast[] = []
-    
+
     for (const key of broadcastKeys) {
       const broadcast = await window.spark.kv.get<MConsoleBroadcast>(key)
       if (broadcast && broadcast.timestamp > timestamp) {
@@ -150,8 +199,29 @@ class MConsoleSync {
     requiresAck: boolean = false,
     autoExpireMs?: number
   ): Promise<string> {
+    // Prefer real EyesOnly event injection when director session is present.
+    if (this._eyesOnlyBaseUrl && this._mToken) {
+      const res = await this._mFetch('/api/m/event', {
+        method: 'POST',
+        body: JSON.stringify({
+          event_type: type,
+          payload: {
+            ...payload,
+            _ey: { broadcastBy, targetAgents, requiresAck, autoExpireMs },
+          },
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({} as any)) as any
+        throw new Error(d?.message || `EyesOnly event inject failed (${res.status})`)
+      }
+      const d = await res.json().catch(() => ({} as any)) as any
+      return String(d?.event?.id || d?.id || `event-${Date.now()}`)
+    }
+
+    // Fallback: Spark KV simulation
     const broadcastId = `broadcast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    
+
     const broadcast: MConsoleBroadcast = {
       id: broadcastId,
       type,
@@ -165,7 +235,7 @@ class MConsoleSync {
 
     const key = `${this.kvPrefix}:broadcast:${broadcast.timestamp}-${Math.random().toString(36).substr(2, 9)}`
     await window.spark.kv.set(key, broadcast)
-    
+
     return broadcastId
   }
 
