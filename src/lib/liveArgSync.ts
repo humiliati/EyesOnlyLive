@@ -36,7 +36,31 @@ class LiveArgSyncManager {
   private _listeners: Set<(items: RogueItem[]) => void> = new Set()
   private _deadDropListeners: Set<(drops: DeadDropLocation[]) => void> = new Set()
   private _eventListeners: Set<(event: ArgEvent) => void> = new Set()
-  
+
+  private get _eyesOnlyBaseUrl(): string | null {
+    return (window as any).__EYESONLY_BASE_URL__ || null
+  }
+  private get _mToken(): string | null {
+    return (window as any).__EYESONLY_M_TOKEN__ || null
+  }
+  private get _scenarioId(): number {
+    return parseInt(String((window as any).__EYESONLY_SCENARIO_ID__ || '1'), 10) || 1
+  }
+
+  private async _mFetch(path: string, opts: RequestInit = {}): Promise<Response> {
+    const base = this._eyesOnlyBaseUrl
+    const token = this._mToken
+    if (!base || !token) throw new Error('Missing EyesOnly director session (baseUrl/token)')
+    return fetch(`${base}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.headers || {}),
+      },
+    })
+  }
+
   private get BASE_URL(): string {
     return (window as any).__ARG_API_BASE__ || '/api/m'
   }
@@ -126,6 +150,10 @@ class LiveArgSyncManager {
   }
 
   async createDeadDrop(drop: Omit<DeadDropLocation, 'id' | 'createdAt' | 'status'>): Promise<DeadDropLocation> {
+    // NOTE: EyesOnly currently creates/retrieves dead drops via Ops actor endpoints
+    // (/api/ops/dead-drop) and M mode only lists them.
+    // Until we add a director-authority dead-drop create endpoint, keep Spark KV behavior
+    // for offline/simulated runs.
     try {
       const newDrop: DeadDropLocation = {
         id: `DROP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -137,7 +165,7 @@ class LiveArgSyncManager {
 
       await spark.kv.set(`dead-drop:${newDrop.id}`, newDrop)
       this._notifyDeadDropListeners(await this.getDeadDrops())
-      
+
       return newDrop
     } catch (error) {
       console.error('[LiveArgSync] Failed to create dead drop:', error)
@@ -147,15 +175,59 @@ class LiveArgSyncManager {
 
   async getDeadDrops(): Promise<DeadDropLocation[]> {
     try {
+      // Prefer live EyesOnly grid/cell dead drops (director view).
+      if (this._eyesOnlyBaseUrl && this._mToken) {
+        const res = await this._mFetch(`/api/m/grid/${this._scenarioId}/cells`)
+        if (!res.ok) throw new Error(`EyesOnly dead drop fetch failed (${res.status})`)
+        const data = await res.json().catch(() => ({} as any)) as any
+        const cells = Array.isArray(data?.cells) ? data.cells : []
+
+        const drops: DeadDropLocation[] = []
+        for (const cell of cells) {
+          const dd = Array.isArray(cell?.dead_drops) ? cell.dead_drops : []
+          for (const d of dd) {
+            const rawStatus = String(d?.status || 'active')
+            const status: DeadDropLocation['status'] =
+              rawStatus === 'retrieved' ? 'retrieved' :
+              rawStatus === 'expired' ? 'expired' :
+              rawStatus === 'discovered' ? 'discovered' :
+              'active'
+
+            drops.push({
+              id: String(d?.id || ''),
+              name: String(d?.label || 'Dead Drop'),
+              gridX: Number(cell?.col ?? 0),
+              gridY: Number(cell?.row ?? 0),
+              latitude: 0,
+              longitude: 0,
+              items: [],
+              discoveredBy: [],
+              createdBy: 'M',
+              createdAt: Date.now(),
+              status,
+              metadata: {
+                cell_id: cell?.cell_id,
+                lane_id: d?.lane_id,
+                eyesOnlyStatus: rawStatus,
+              },
+            })
+          }
+        }
+
+        // newest first to match previous semantics
+        return drops.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      }
+
+      // Fallback: Spark KV
       const keys = await spark.kv.keys()
       const dropKeys = keys.filter(k => k.startsWith('dead-drop:'))
-      
+
       const drops: DeadDropLocation[] = []
       for (const key of dropKeys) {
         const drop = await spark.kv.get<DeadDropLocation>(key)
         if (drop) drops.push(drop)
       }
-      
+
       return drops.sort((a, b) => b.createdAt - a.createdAt)
     } catch (error) {
       console.error('[LiveArgSync] Failed to get dead drops:', error)
@@ -331,6 +403,10 @@ class LiveArgSyncManager {
         await rogueItemRegistry.reload()
         const items = rogueItemRegistry.getAllItems()
         this._notifyListeners(items)
+
+        // Also refresh dead drops if we have a director session
+        const drops = await this.getDeadDrops()
+        this._notifyDeadDropListeners(drops)
       } catch (error) {
         console.error('[LiveArgSync] Sync failed:', error)
       }
