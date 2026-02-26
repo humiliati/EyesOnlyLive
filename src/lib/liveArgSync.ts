@@ -396,14 +396,20 @@ class LiveArgSyncManager {
           method: 'POST',
           body: JSON.stringify({ lane_id: laneId, label: 'Dead Drop', action: 'retrieve' }),
         })
+        const d = await res.json().catch(() => ({} as any)) as any
         if (!res.ok) {
-          const d = await res.json().catch(() => ({} as any)) as any
           throw new Error(d?.message || `Dead drop retrieve failed (${res.status})`)
         }
 
-        // Server dead drops don't carry item payloads yet.
+        const itemIds: string[] = Array.isArray(d?.items) ? d.items : []
+        const items: RogueItem[] = []
+        for (const itemId of itemIds) {
+          const item = rogueItemRegistry.getItem(itemId)
+          if (item) items.push(item)
+        }
+
         this._notifyDeadDropListeners(await this.getDeadDrops())
-        return []
+        return items
       }
 
       const drop = await spark.kv.get<DeadDropLocation>(`dead-drop:${dropId}`)
