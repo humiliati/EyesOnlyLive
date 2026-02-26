@@ -2469,7 +2469,7 @@ function App() {
   const [persona, setPersona] = useState<Persona>('director')
   const [baseUrl, setBaseUrl] = useState<string>(() => {
     const s = loadSession()
-    return s?.baseUrl || 'http://localhost:8787'
+    return s?.baseUrl || 'https://flapsandseals.com'
   })
   const [callsign, setCallsign] = useState('')
   const [password, setPassword] = useState('')

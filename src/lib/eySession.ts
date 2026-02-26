@@ -50,7 +50,12 @@ export function clearSession(): void {
 export function normalizeBaseUrl(url: string): string {
   url = String(url || '').trim()
   if (!url) return ''
-  // allow http://localhost:8787 or https://flapsandseals.com
+
+  // Allow bare hostnames like flapsandseals.com
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url
+  }
+
   url = url.replace(/\/$/, '')
   return url
 }
