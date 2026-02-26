@@ -332,7 +332,7 @@ class GameStateSync {
       emergencyPanicActive: false
     }
 
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyM) {
       await this._mFetch('/api/m/scenario/freeze', {
         method: 'POST',
         body: JSON.stringify({ scenario_id: this._scenarioId, frozen: true }),
@@ -356,7 +356,7 @@ class GameStateSync {
       emergencyPanicActive: false
     }
 
-    if (this._usingEyesOnly) {
+    if (this._usingEyesOnlyM) {
       await this._mFetch('/api/m/scenario/freeze', {
         method: 'POST',
         body: JSON.stringify({ scenario_id: this._scenarioId, frozen: false }),
@@ -405,9 +405,28 @@ class GameStateSync {
   }
 
   async publishTelemetry(telemetry: PlayerTelemetry): Promise<void> {
-    // Director console typically doesn't publish telemetry; actors do via /api/ops/telemetry.
-    if (this._usingEyesOnly) {
-      // No-op (or could proxy to /api/ops/telemetry in ops persona in the future)
+    if (this._usingEyesOnlyOps) {
+      // Ops actor publishes telemetry
+      await this._opsFetch('/api/ops/telemetry', {
+        method: 'POST',
+        body: JSON.stringify({
+          lat: telemetry.latitude,
+          lng: telemetry.longitude,
+          altitude: telemetry.altitude,
+          speed: telemetry.speed,
+          heading: telemetry.heading,
+          heart_rate: telemetry.heartRate,
+          blood_oxygen: telemetry.bloodOxygen,
+          stress_level: telemetry.stressLevel,
+          temperature: telemetry.temperature,
+          motion_state: telemetry.speed > 4 ? 'running' : telemetry.speed > 1 ? 'walking' : 'stationary',
+        }),
+      })
+      return
+    }
+
+    if (this._usingEyesOnlyM) {
+      // Director console does not publish telemetry.
       return
     }
 
@@ -425,8 +444,27 @@ class GameStateSync {
 
   async getAllTelemetry(): Promise<PlayerTelemetry[]> {
     if (this._usingEyesOnlyOps) {
-      // Ops doesn't need all telemetry; return empty.
-      return []
+      const res = await this._opsFetch('/api/ops/actors/positions?team=red')
+      if (!res.ok) throw new Error(`EyesOnly ops positions fetch failed (${res.status})`)
+      const data = await res.json().catch(() => ({} as any)) as any
+      const positions = Array.isArray(data?.positions) ? data.positions : []
+
+      // Map to PlayerTelemetry; treat hidden GPS as (0,0) but keep lastUpdate so UI can show presence.
+      return positions.map((p: any) => ({
+        playerId: String(p.actor_id),
+        playerCallsign: String(p.callsign || 'UNKNOWN'),
+        playerTeam: 'red',
+        latitude: p.lat == null ? 0 : Number(p.lat),
+        longitude: p.lng == null ? 0 : Number(p.lng),
+        altitude: 0,
+        speed: 0,
+        heading: 0,
+        heartRate: 0,
+        bloodOxygen: 0,
+        stressLevel: 0,
+        temperature: 0,
+        lastUpdate: Number(p.last_seen_at ?? 0),
+      })).sort((a: any, b: any) => (b.lastUpdate || 0) - (a.lastUpdate || 0))
     }
 
     if (this._usingEyesOnlyM) {
