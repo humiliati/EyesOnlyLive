@@ -48,6 +48,34 @@ class GameStateSync {
   private syncInterval: number | null = null
   private lastSyncTimestamp: number = 0
 
+  private get _eyesOnlyBaseUrl(): string | null {
+    return (window as any).__EYESONLY_BASE_URL__ || null
+  }
+  private get _mToken(): string | null {
+    return (window as any).__EYESONLY_M_TOKEN__ || null
+  }
+  private get _scenarioId(): number {
+    return parseInt(String((window as any).__EYESONLY_SCENARIO_ID__ || '1'), 10) || 1
+  }
+
+  private async _mFetch(path: string, opts: RequestInit = {}): Promise<Response> {
+    const base = this._eyesOnlyBaseUrl
+    const token = this._mToken
+    if (!base || !token) throw new Error('Missing EyesOnly director session (baseUrl/token)')
+    return fetch(`${base}${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(opts.headers || {}),
+      },
+    })
+  }
+
+  private get _usingEyesOnly(): boolean {
+    return !!(this._eyesOnlyBaseUrl && this._mToken)
+  }
+
   startSync(pollIntervalMs: number = 1000): void {
     if (this.syncInterval) {
       this.stopSync()
@@ -108,6 +136,43 @@ class GameStateSync {
   }
 
   async getGameState(): Promise<GameState> {
+    if (this._usingEyesOnly) {
+      // Frozen state is exposed on the grid cells response.
+      const res = await this._mFetch(`/api/m/grid/${this._scenarioId}/cells`)
+      if (!res.ok) throw new Error(`EyesOnly grid state fetch failed (${res.status})`)
+      const data = await res.json().catch(() => ({} as any)) as any
+      const frozen = !!data?.frozen
+
+      // Best-effort: detect recent panic events from the event log.
+      let emergencyPanicActive = false
+      let panicInitiatedBy: string | undefined
+      let panicTimestamp: number | undefined
+      try {
+        const evRes = await this._mFetch(`/api/m/events/${this._scenarioId}?limit=80`)
+        if (evRes.ok) {
+          const evData = await evRes.json().catch(() => ({} as any)) as any
+          const events = Array.isArray(evData?.events) ? evData.events : []
+          const panicEv = events.find((e: any) => e.event_type === 'actor_panic' || e.event_type === 'director_panic')
+          if (panicEv) {
+            const ts = panicEv.created_at ? new Date(panicEv.created_at).getTime() : Date.now()
+            // treat last 2 hours as "active" for UI alerting
+            if ((Date.now() - ts) < 2 * 60 * 60 * 1000) {
+              emergencyPanicActive = true
+              panicInitiatedBy = String(panicEv.payload?.callsign || panicEv.payload?.triggered_by || 'UNKNOWN')
+              panicTimestamp = ts
+            }
+          }
+        }
+      } catch {}
+
+      return {
+        frozen,
+        emergencyPanicActive,
+        panicInitiatedBy,
+        panicTimestamp,
+      }
+    }
+
     const state = await window.spark.kv.get<GameState>(`${this.kvPrefix}:game-state`)
     return state || {
       frozen: false,
@@ -116,6 +181,31 @@ class GameStateSync {
   }
 
   async setGameState(state: GameState): Promise<void> {
+    if (this._usingEyesOnly) {
+      // Only frozen is a first-class state toggle in EyesOnly.
+      if (typeof state.frozen !== 'undefined') {
+        await this._mFetch('/api/m/scenario/freeze', {
+          method: 'POST',
+          body: JSON.stringify({ scenario_id: this._scenarioId, frozen: !!state.frozen }),
+        })
+      }
+      // Panic state: best-effort via event injection (does not replace actor panic).
+      if (state.emergencyPanicActive) {
+        await this._mFetch('/api/m/event', {
+          method: 'POST',
+          body: JSON.stringify({
+            event_type: 'director_panic',
+            payload: {
+              message: state.freezeReason || 'DIRECTOR PANIC',
+              triggered_by: state.panicInitiatedBy || 'DIRECTOR',
+              ts: Date.now(),
+            },
+          }),
+        })
+      }
+      return
+    }
+
     await window.spark.kv.set(`${this.kvPrefix}:game-state`, state)
   }
 
@@ -127,6 +217,22 @@ class GameStateSync {
       freezeTimestamp: Date.now(),
       emergencyPanicActive: false
     }
+
+    if (this._usingEyesOnly) {
+      await this._mFetch('/api/m/scenario/freeze', {
+        method: 'POST',
+        body: JSON.stringify({ scenario_id: this._scenarioId, frozen: true }),
+      })
+      await this._mFetch('/api/m/event', {
+        method: 'POST',
+        body: JSON.stringify({
+          event_type: 'game_freeze',
+          payload: { message: reason, triggered_by: initiatedBy, ts: Date.now() },
+        }),
+      }).catch(() => {})
+      return
+    }
+
     await this.setGameState(state)
   }
 
@@ -135,6 +241,22 @@ class GameStateSync {
       frozen: false,
       emergencyPanicActive: false
     }
+
+    if (this._usingEyesOnly) {
+      await this._mFetch('/api/m/scenario/freeze', {
+        method: 'POST',
+        body: JSON.stringify({ scenario_id: this._scenarioId, frozen: false }),
+      })
+      await this._mFetch('/api/m/event', {
+        method: 'POST',
+        body: JSON.stringify({
+          event_type: 'game_unfreeze',
+          payload: { message: 'unfreeze', ts: Date.now() },
+        }),
+      }).catch(() => {})
+      return
+    }
+
     await this.setGameState(state)
   }
 
@@ -148,10 +270,33 @@ class GameStateSync {
       panicInitiatedBy: initiatedBy,
       panicTimestamp: Date.now()
     }
+
+    if (this._usingEyesOnly) {
+      // Freeze scenario + insert director panic marker.
+      await this._mFetch('/api/m/scenario/freeze', {
+        method: 'POST',
+        body: JSON.stringify({ scenario_id: this._scenarioId, frozen: true }),
+      })
+      await this._mFetch('/api/m/event', {
+        method: 'POST',
+        body: JSON.stringify({
+          event_type: 'director_panic',
+          payload: { callsign: initiatedBy, message: 'PANIC - DIRECTOR ABORT', ts: Date.now() },
+        }),
+      })
+      return
+    }
+
     await this.setGameState(state)
   }
 
   async publishTelemetry(telemetry: PlayerTelemetry): Promise<void> {
+    // Director console typically doesn't publish telemetry; actors do via /api/ops/telemetry.
+    if (this._usingEyesOnly) {
+      // No-op (or could proxy to /api/ops/telemetry in ops persona in the future)
+      return
+    }
+
     const key = `${this.kvPrefix}:telemetry:${telemetry.playerId}`
     await window.spark.kv.set(key, telemetry)
 
@@ -165,6 +310,29 @@ class GameStateSync {
   }
 
   async getAllTelemetry(): Promise<PlayerTelemetry[]> {
+    if (this._usingEyesOnly) {
+      const res = await this._mFetch(`/api/m/actors/positions/${this._scenarioId}`)
+      if (!res.ok) throw new Error(`EyesOnly telemetry fetch failed (${res.status})`)
+      const data = await res.json().catch(() => ({} as any)) as any
+      const positions = Array.isArray(data?.positions) ? data.positions : []
+
+      return positions.map((p: any) => ({
+        playerId: String(p.actor_id),
+        playerCallsign: String(p.callsign || 'UNKNOWN'),
+        playerTeam: (String(p.team || 'blue').toLowerCase() === 'red' ? 'red' : 'blue'),
+        latitude: Number(p.lat ?? 0),
+        longitude: Number(p.lng ?? 0),
+        altitude: 0,
+        speed: 0,
+        heading: 0,
+        heartRate: 0,
+        bloodOxygen: 0,
+        stressLevel: 0,
+        temperature: 0,
+        lastUpdate: Number(p.last_seen_at ?? 0),
+      })).sort((a: any, b: any) => (b.lastUpdate || 0) - (a.lastUpdate || 0))
+    }
+
     const allKeys = await window.spark.kv.keys()
     const telemetryKeys = allKeys.filter((key: string) => 
       key.startsWith(`${this.kvPrefix}:telemetry:`) &&
@@ -204,6 +372,32 @@ class GameStateSync {
   }
 
   async getOverduePings(): Promise<UnacknowledgedPing[]> {
+    if (this._usingEyesOnly) {
+      const res = await this._mFetch(`/api/m/pings/${this._scenarioId}?limit=80`)
+      if (!res.ok) throw new Error(`EyesOnly pings fetch failed (${res.status})`)
+      const data = await res.json().catch(() => ({} as any)) as any
+      const pings = Array.isArray(data?.pings) ? data.pings : []
+      const now = Date.now()
+
+      return pings
+        .filter((p: any) => p?.event_type === 'mping')
+        .map((p: any) => {
+          const payload = p.payload || {}
+          const issuedAt = Number(payload.sent_at || (p.created_at ? new Date(p.created_at).getTime() : Date.now()))
+          const timeoutMs = 30_000
+          const acknowledged = !!p.ack
+          return {
+            pingId: String(p.id),
+            targetAgentId: String(payload.target_actor_id || ''),
+            targetCallsign: String(payload.target_callsign || ''),
+            issuedAt,
+            timeoutMs,
+            acknowledged,
+          } as UnacknowledgedPing
+        })
+        .filter((p: UnacknowledgedPing) => !p.acknowledged && (now - p.issuedAt) > p.timeoutMs)
+    }
+
     const allKeys = await window.spark.kv.keys()
     const pingKeys = allKeys.filter((key: string) => key.startsWith(`${this.kvPrefix}:ping:`))
 
