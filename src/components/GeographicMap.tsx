@@ -87,6 +87,15 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
   const isOpsSession = typeof window !== 'undefined' && !!(window as any).__EYESONLY_OPS_TOKEN__ && !(window as any).__EYESONLY_M_TOKEN__
   const [opsTelemetryVisible, setOpsTelemetryVisible] = useState(true)
 
+  const redTeamDark = useMemo(() => {
+    // Hidden points are encoded by gameStateSync as (0,0)
+    return redTeamTelemetry.filter(t => t.latitude === 0 && t.longitude === 0)
+  }, [redTeamTelemetry])
+
+  const redTeamVisible = useMemo(() => {
+    return redTeamTelemetry.filter(t => !(t.latitude === 0 && t.longitude === 0))
+  }, [redTeamTelemetry])
+
   useEffect(() => {
     if (isOpsSession) {
       const v = window.localStorage.getItem('ey.ops.telemetryVisible')
@@ -121,7 +130,7 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
   const bounds = useMemo((): MapBounds => {
     const allPositions = [
       ...assets.map(a => ({ lat: a.latitude, lng: a.longitude })),
-      ...redTeamTelemetry.map(t => ({ lat: t.latitude, lng: t.longitude }))
+      ...redTeamVisible.map(t => ({ lat: t.latitude, lng: t.longitude }))
     ]
 
     if (allPositions.length === 0) {
@@ -150,7 +159,7 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
       minLng: minLng - lngPadding,
       maxLng: maxLng + lngPadding
     }
-  }, [assets, redTeamTelemetry])
+  }, [assets, redTeamVisible])
 
   const latLngToPixel = useCallback((lat: number, lng: number): { x: number; y: number } => {
     const latRange = bounds.maxLat - bounds.minLat
@@ -345,7 +354,8 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="text-[10px] text-muted-foreground">
-                {assets.length} blue | {redTeamTelemetry.length} red
+                {assets.length} blue | {redTeamVisible.length} red
+                {redTeamDark.length > 0 ? ` | ${redTeamDark.length} dark` : ''}
               </div>
               <Button
                 size="sm"
@@ -576,7 +586,7 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
                 )
               })}
 
-              {showRedTeam && redTeamTelemetry.map(player => {
+              {showRedTeam && redTeamVisible.map(player => {
                 const pos = latLngToPixel(player.latitude, player.longitude)
                 const isStale = Date.now() - player.lastUpdate > 30000
                 const redColor = 'oklch(0.65 0.25 25)'
@@ -697,6 +707,11 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
         >
           <MapPin weight="bold" className="text-primary" size={16} />
           <span className="text-xs tracking-[0.08em] uppercase">Asset GPS List</span>
+          {redTeamDark.length > 0 && (
+            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-destructive text-destructive">
+              {redTeamDark.length} GPS DARK
+            </Badge>
+          )}
           <CaretDown 
             weight="bold" 
             size={12} 
@@ -707,12 +722,13 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
         {!isListCollapsed && (
           <ScrollArea className="h-[200px]">
             <div className="space-y-2 pr-3">
-            {assets.length === 0 ? (
+            {(assets.length === 0 && redTeamDark.length === 0) ? (
               <div className="text-[10px] text-muted-foreground text-center py-4">
                 No assets tracked
               </div>
             ) : (
-              assets.map(asset => (
+              <>
+                {assets.map(asset => (
                 <div 
                   key={asset.id} 
                   onClick={() => handleAssetClick(asset)}
@@ -781,7 +797,42 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
                     )}
                   </div>
                 </div>
-              ))
+              ))}
+
+                {redTeamDark.length > 0 && (
+                  <div className="pt-2 mt-2 border-t border-border">
+                    <div className="text-[9px] tracking-[0.12em] uppercase text-destructive mb-2">
+                      Red Team Present (GPS Dark)
+                    </div>
+                    <div className="space-y-2">
+                      {redTeamDark.map((p) => {
+                        const isStale = Date.now() - p.lastUpdate > 30000
+                        return (
+                          <div
+                            key={`gps-dark-${p.playerId}`}
+                            className="bg-card border border-border p-2.5 space-y-1"
+                            style={{ opacity: isStale ? 0.6 : 1 }}
+                            title="This actor is hiding GPS from ops. M still sees full telemetry."
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-destructive" />
+                                <span className="text-xs font-bold">{p.playerCallsign}</span>
+                              </div>
+                              <Badge variant="outline" className="text-[8px] px-1.5 py-0 border-destructive text-destructive">
+                                GPS DARK
+                              </Badge>
+                            </div>
+                            <div className="text-[9px] text-muted-foreground tabular-nums">
+                              last: {formatTimeSince(p.lastUpdate)}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
             </div>
           </ScrollArea>
