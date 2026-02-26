@@ -37,6 +37,9 @@ class LiveArgSyncManager {
   private _deadDropListeners: Set<(drops: DeadDropLocation[]) => void> = new Set()
   private _eventListeners: Set<(event: ArgEvent) => void> = new Set()
 
+  private _gridConfig: any | null = null
+  private _gridConfigAt: number = 0
+
   private get _eyesOnlyBaseUrl(): string | null {
     return (window as any).__EYESONLY_BASE_URL__ || null
   }
@@ -153,9 +156,9 @@ class LiveArgSyncManager {
     try {
       // Prefer live EyesOnly director create endpoint when session is present.
       if (this._eyesOnlyBaseUrl && this._mToken) {
-        // NOTE: EyesOnly dead drops are lane-based today. We approximate lane_id
-        // from gridX (A/B/C...) until we introduce an explicit lane picker.
-        const laneId = String.fromCharCode(65 + (drop.gridX || 0));
+        // EyesOnly dead drops are lane-based. Use calibrated grid col labels when available.
+        const cfg = await this.getGridConfig();
+        const laneId = this.getLaneIdForGridX(drop.gridX || 0, cfg);
         const res = await this._mFetch('/api/m/dead-drop', {
           method: 'POST',
           body: JSON.stringify({
@@ -209,6 +212,40 @@ class LiveArgSyncManager {
       console.error('[LiveArgSync] Failed to create dead drop:', error)
       throw error
     }
+  }
+
+  async getGridConfig(force: boolean = false): Promise<any | null> {
+    try {
+      if (!force && this._gridConfig && (Date.now() - this._gridConfigAt) < 30_000) {
+        return this._gridConfig
+      }
+      if (this._eyesOnlyBaseUrl && this._mToken) {
+        const res = await this._mFetch(`/api/m/grid/${this._scenarioId}/cells`)
+        if (!res.ok) throw new Error(`EyesOnly grid config fetch failed (${res.status})`)
+        const data = await res.json().catch(() => ({} as any)) as any
+        this._gridConfig = data?.config || null
+        this._gridConfigAt = Date.now()
+        return this._gridConfig
+      }
+      return null
+    } catch (e) {
+      return null
+    }
+  }
+
+  getGridLabel(x: number, y: number, cfg?: any | null): string {
+    cfg = cfg || this._gridConfig
+    const col = Array.isArray(cfg?.col_labels) ? cfg.col_labels[x] : null
+    const row = Array.isArray(cfg?.row_labels) ? cfg.row_labels[y] : null
+    const colLbl = col || String.fromCharCode(65 + (x || 0))
+    const rowLbl = row || String((y || 0) + 1)
+    return `${colLbl}${rowLbl}`
+  }
+
+  getLaneIdForGridX(x: number, cfg?: any | null): string {
+    cfg = cfg || this._gridConfig
+    const col = Array.isArray(cfg?.col_labels) ? cfg.col_labels[x] : null
+    return String(col || String.fromCharCode(65 + (x || 0)))
   }
 
   async getDeadDrops(): Promise<DeadDropLocation[]> {

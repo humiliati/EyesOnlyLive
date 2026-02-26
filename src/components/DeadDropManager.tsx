@@ -106,7 +106,8 @@ export function DeadDropManager({
   useEffect(() => {
     loadDrops()
     loadAvailableItems()
-    
+    liveArgSync.getGridConfig().then((c) => setGridCfg(c))
+
     const unsubscribe = liveArgSync.onDeadDropsUpdate((updatedDrops) => {
       setDrops(updatedDrops)
     })
@@ -214,8 +215,11 @@ export function DeadDropManager({
     )
   }
 
+  const [gridCfg, setGridCfg] = useState<any | null>(null)
+
   const getGridLabel = (x: number, y: number): string => {
-    return `${String.fromCharCode(65 + x)}${y + 1}`
+    // leverage EyesOnly grid calibration (A..Z etc)
+    return liveArgSync.getGridLabel(x, y, gridCfg)
   }
 
   const getStatusIcon = (status: DeadDropLocation['status']) => {
