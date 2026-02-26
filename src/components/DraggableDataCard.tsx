@@ -149,7 +149,7 @@ export function DraggableDataCard({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       className={cn(
-        'border-primary/30 p-4 space-y-3 transition-all duration-200',
+        'border-primary/30 p-2.5 space-y-2 transition-all duration-200',
         'hover:border-primary/50 hover:shadow-[0_0_20px_rgba(120,185,127,0.15)]',
         'active:shadow-[0_0_30px_rgba(120,185,127,0.25)]',
         isDragging && 'opacity-40 scale-95 cursor-grabbing border-primary/70',
@@ -159,7 +159,7 @@ export function DraggableDataCard({
       )}
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 flex-1">
+        <div className="flex items-center gap-1.5 flex-1">
           <button
             className={cn(
               'cursor-grab active:cursor-grabbing text-muted-foreground hover:text-primary transition-all duration-200',
@@ -178,7 +178,7 @@ export function DraggableDataCard({
           {icon}
           <span className="text-xs tracking-[0.08em] uppercase">{title}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {headerContent}
           {canCollapse && (
             <button

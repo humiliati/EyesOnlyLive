@@ -1570,9 +1570,9 @@ function App() {
     <>
       <Toaster position="top-center" />
       <div className="min-h-screen bg-background text-foreground scanline-effect">
-        <div className="max-w-md mx-auto p-4 space-y-4">
-        <header className="flex items-center justify-between border border-border p-3 bg-card">
-          <div className="flex items-center gap-2">
+        <div className="max-w-md mx-auto p-3 space-y-2.5">
+        <header className="flex items-center justify-between border border-border p-2 bg-card">
+          <div className="flex items-center gap-1.5">
             <Eye weight="bold" className="text-primary" size={20} />
             <div>
               <div className="text-xs tracking-widest">EYES ONLY</div>
@@ -2150,16 +2150,16 @@ function App() {
                 isDragging={draggingCardId === 'agent-id'}
                 isDragTarget={dragOverCardId === 'agent-id'}
               >
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Mission</span>
-                    <Badge className={`${getThreatColor()} text-[9px] px-2 py-0`}>
+                    <Badge className={`${getThreatColor()} text-[9px] px-1.5 py-0`}>
                       {missionData.threatLevel}
                     </Badge>
                   </div>
                   <div className="text-sm font-medium">{missionData.name}</div>
                   <div className="text-[10px] text-muted-foreground">{missionData.objective}</div>
-                  <div className="pt-2 space-y-1">
+                  <div className="pt-1.5 space-y-0.5">
                     <div className="flex justify-between text-[10px]">
                       <span className="text-muted-foreground">PROGRESS</span>
                       <span className="tabular-nums">{missionData.progress.toFixed(1)}%</span>
@@ -2185,8 +2185,8 @@ function App() {
                 isDragging={draggingCardId === 'biometrics'}
                 isDragTarget={dragOverCardId === 'biometrics'}
               >
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
                     <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Heart Rate</div>
                     <div className={`text-xl font-bold tabular-nums ${getHeartRateStatus()}`}>
                       {Math.round(biometrics.heartRate)}
@@ -2194,7 +2194,7 @@ function App() {
                     </div>
                   </div>
                   
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Blood O₂</div>
                     <div className="text-xl font-bold tabular-nums text-primary">
                       {Math.round(biometrics.bloodOxygen)}
@@ -2202,7 +2202,7 @@ function App() {
                     </div>
                   </div>
                   
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Stress</div>
                     <div className={`text-xl font-bold tabular-nums ${getStressStatus()}`}>
                       {Math.round(biometrics.stressLevel)}
@@ -2210,7 +2210,7 @@ function App() {
                     </div>
                   </div>
                   
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Body Temp</div>
                     <div className="text-xl font-bold tabular-nums text-primary">
                       {biometrics.temperature.toFixed(1)}
@@ -2236,8 +2236,8 @@ function App() {
                 isDragging={draggingCardId === 'location'}
                 isDragTarget={dragOverCardId === 'location'}
               >
-                <div className="space-y-2">
-                  <div className="space-y-1">
+                <div className="space-y-1.5">
+                  <div className="space-y-0.5">
                     <div className="text-[10px] tracking-[0.08em] uppercase text-muted-foreground">Coordinates</div>
                     <div className="text-xs font-mono tabular-nums text-primary">
                       {formatCoordinate(location.latitude, 6)}°N
@@ -2247,20 +2247,20 @@ function App() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    <div className="space-y-1">
+                  <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                    <div className="space-y-0.5">
                       <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Speed</div>
                       <div className="text-sm font-bold tabular-nums">{location.speed.toFixed(1)}</div>
                       <div className="text-[9px] text-muted-foreground">m/s</div>
                     </div>
                     
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Distance</div>
                       <div className="text-sm font-bold tabular-nums">{location.distance.toFixed(2)}</div>
                       <div className="text-[9px] text-muted-foreground">km</div>
                     </div>
                     
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Elevation</div>
                       <div className="text-sm font-bold tabular-nums">{Math.round(location.elevation)}</div>
                       <div className="text-[9px] text-muted-foreground">m</div>
@@ -2285,9 +2285,9 @@ function App() {
                 isDragging={draggingCardId === 'transmission'}
                 isDragTarget={dragOverCardId === 'transmission'}
               >
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-0.5">
                       <div className="flex items-center gap-1">
                         <WifiHigh weight="bold" className="text-primary" size={12} />
                         <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Signal</div>
@@ -2295,7 +2295,7 @@ function App() {
                       <div className="text-lg font-bold tabular-nums">{Math.round(signalStrength)}%</div>
                     </div>
                     
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       <div className="flex items-center gap-1">
                         <BatteryFull weight="bold" className={batteryLevel < 20 ? 'text-destructive' : 'text-primary'} size={12} />
                         <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Power</div>
@@ -2303,7 +2303,7 @@ function App() {
                       <div className="text-lg font-bold tabular-nums">{Math.round(batteryLevel)}%</div>
                     </div>
                     
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       <div className="flex items-center gap-1">
                         <Lock weight="bold" className="text-primary" size={12} />
                         <div className="text-[9px] tracking-[0.08em] uppercase text-muted-foreground">Secure</div>
@@ -2430,8 +2430,8 @@ function App() {
         />
 
         {batteryLevel < 20 && (
-          <Card className="border-destructive bg-destructive/10 p-3">
-            <div className="flex items-center gap-2">
+          <Card className="border-destructive bg-destructive/10 p-2">
+            <div className="flex items-center gap-1.5">
               <WarningCircle weight="bold" className="text-destructive" size={16} />
               <div className="text-xs">
                 <div className="font-bold text-destructive">LOW POWER WARNING</div>
@@ -2442,8 +2442,8 @@ function App() {
         )}
 
         {biometrics.stressLevel > 80 && (
-          <Card className="border-accent bg-accent/10 p-3">
-            <div className="flex items-center gap-2">
+          <Card className="border-accent bg-accent/10 p-2">
+            <div className="flex items-center gap-1.5">
               <WarningCircle weight="bold" className="text-accent" size={16} />
               <div className="text-xs">
                 <div className="font-bold text-accent">ELEVATED STRESS DETECTED</div>
@@ -2453,7 +2453,7 @@ function App() {
           </Card>
         )}
 
-        <div className="text-center text-[9px] text-muted-foreground tracking-wider pb-4 opacity-50">
+        <div className="text-center text-[9px] text-muted-foreground tracking-wider pb-3 opacity-50">
           ░ CLASSIFIED - FOR AUTHORIZED PERSONNEL ONLY ░
         </div>
         </div>
