@@ -47,6 +47,9 @@ export function DeadDropManager({
   currentUser,
   autoFillLocation
 }: DeadDropManagerProps) {
+  const eyesOnlyConnected = typeof window !== 'undefined' && !!(window as any).__EYESONLY_M_TOKEN__
+  const eyesOnlyReadOnly = eyesOnlyConnected // until /api/m gets a create endpoint
+
   const [drops, setDrops] = useState<DeadDropLocation[]>([])
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [availableItems, setAvailableItems] = useState<RogueItem[]>([])
@@ -254,11 +257,22 @@ export function DeadDropManager({
           </Badge>
         </div>
 
+        {eyesOnlyReadOnly && (
+          <div className="mb-3">
+            <Card className="p-2 border-amber-500/30 bg-amber-500/5">
+              <div className="text-[11px] text-amber-200">
+                LIVE PORTAL CONNECTED — dead drops are currently <span className="font-semibold">read-only</span> in EY.
+                <span className="opacity-80"> (EyesOnly creates/retrieves drops via Ops endpoints today.)</span>
+              </div>
+            </Card>
+          </div>
+        )}
+
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full" size="sm">
+            <Button className="w-full" size="sm" disabled={eyesOnlyReadOnly}>
               <Plus weight="bold" className="mr-2" size={16} />
-              CREATE DEAD DROP
+              CREATE DEAD DROP{eyesOnlyReadOnly ? ' (READ-ONLY)' : ''}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] p-0">
@@ -494,7 +508,12 @@ export function DeadDropManager({
                       <div className="flex-1">
                         <div className="font-bold text-sm">{drop.name}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">
-                          Grid {getGridLabel(drop.gridX, drop.gridY)} • {drop.latitude.toFixed(6)}, {drop.longitude.toFixed(6)}
+                          Grid {getGridLabel(drop.gridX, drop.gridY)}
+                          {drop.latitude !== 0 && drop.longitude !== 0 ? (
+                            <> • {drop.latitude.toFixed(6)}, {drop.longitude.toFixed(6)}</>
+                          ) : (
+                            <span className="opacity-60"> • (no GPS)</span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 mt-2">
                           <Badge className={`text-[9px] px-1.5 py-0 ${getStatusColor(drop.status)}`}>
@@ -510,6 +529,11 @@ export function DeadDropManager({
                           <Badge variant="outline" className="text-[9px] px-1.5 py-0">
                             {drop.items.length} ITEM{drop.items.length !== 1 ? 'S' : ''}
                           </Badge>
+                          {drop.metadata?.cell_id && (
+                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-primary/30 text-primary/90">
+                              LIVE
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -518,6 +542,8 @@ export function DeadDropManager({
                       variant="ghost"
                       onClick={() => handleDeleteDrop(drop.id)}
                       className="h-8 w-8 p-0"
+                      disabled={eyesOnlyReadOnly && !!drop.metadata?.cell_id}
+                      title={eyesOnlyReadOnly && !!drop.metadata?.cell_id ? 'Read-only (live portal drop)' : 'Delete drop'}
                     >
                       <Trash weight="bold" size={14} />
                     </Button>
