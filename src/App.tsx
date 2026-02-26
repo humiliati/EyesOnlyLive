@@ -104,7 +104,7 @@ interface MissionData {
 type DataCardId = 'agent-id' | 'biometrics' | 'location' | 'transmission'
 type PanelId = 'operations-feed' | 'mission-log' | string
 
-function App() {
+function AppInner() {
   const [isTransmitting, setIsTransmitting] = useKV<boolean>('transmission-active', false)
   const [agentCallsign] = useKV<string>('agent-callsign', 'SHADOW-7')
   const [agentId] = useKV<string>('agent-id', 'shadow-7-alpha')
@@ -2458,6 +2458,144 @@ function App() {
         </div>
         </div>
       </div>
+    </>
+  )
+}
+
+import { clearSession, directorLogin, loadSession, normalizeBaseUrl, opsJoin, saveSession, type EySession, type Persona } from '@/lib/eySession'
+
+function App() {
+  const [session, setSession] = useState<EySession | null>(() => loadSession())
+  const [persona, setPersona] = useState<Persona>('director')
+  const [baseUrl, setBaseUrl] = useState<string>(() => {
+    const s = loadSession()
+    return s?.baseUrl || 'http://localhost:8787'
+  })
+  const [callsign, setCallsign] = useState('')
+  const [password, setPassword] = useState('')
+  const [scenarioId, setScenarioId] = useState('1')
+  const [joinCode, setJoinCode] = useState('')
+  const [authBusy, setAuthBusy] = useState(false)
+
+  useEffect(() => {
+    // Expose config for libs (incremental migration away from spark.kv).
+    if (session?.baseUrl) (window as any).__EYESONLY_BASE_URL__ = session.baseUrl
+    if (session?.persona === 'director') {
+      ;(window as any).__EYESONLY_M_TOKEN__ = session.token
+      ;(window as any).__EYESONLY_SCENARIO_ID__ = session.scenarioId
+    } else if (session?.persona === 'ops') {
+      ;(window as any).__EYESONLY_OPS_TOKEN__ = session.token
+    }
+  }, [session])
+
+  const doLogout = useCallback(() => {
+    clearSession()
+    setSession(null)
+    // best-effort clear globals
+    delete (window as any).__EYESONLY_M_TOKEN__
+    delete (window as any).__EYESONLY_OPS_TOKEN__
+    delete (window as any).__EYESONLY_SCENARIO_ID__
+  }, [])
+
+  const doLogin = useCallback(async () => {
+    const b = normalizeBaseUrl(baseUrl)
+    if (!b) { toast.error('Set EyesOnly Base URL'); return }
+
+    setAuthBusy(true)
+    try {
+      if (persona === 'director') {
+        const sId = parseInt(scenarioId, 10) || 1
+        const s = await directorLogin(b, callsign.trim(), password, sId)
+        saveSession(s)
+        setSession(s)
+        toast.success('Director session established')
+      } else if (persona === 'ops') {
+        const s = await opsJoin(b, joinCode.trim(), callsign.trim())
+        saveSession(s)
+        setSession(s)
+        toast.success('Ops session established')
+      } else {
+        // Player mode: scaffold only (we'll wire to EyesOnly player auth once confirmed)
+        const s: EySession = { persona: 'player', baseUrl: b }
+        saveSession(s)
+        setSession(s)
+        toast.success('Player mode (stub)')
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Login failed')
+    } finally {
+      setAuthBusy(false)
+    }
+  }, [persona, baseUrl, callsign, password, scenarioId, joinCode])
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+        <Card className="w-full max-w-[520px] p-4">
+          <div className="text-[12px] tracking-widest opacity-70">EYES ONLY // EY</div>
+          <div className="text-[10px] text-muted-foreground mt-1">Single-persona session. Switch persona by logging out.</div>
+          <Separator className="my-3" />
+
+          <div className="space-y-2">
+            <div className="text-[10px] font-semibold">EYESONLY BASE URL</div>
+            <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={baseUrl} onChange={(e) => setBaseUrl((e.target as any).value)} placeholder="http://localhost:8787" />
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <Button variant={persona === 'director' ? 'default' : 'outline'} onClick={() => setPersona('director')}>M DIRECTOR</Button>
+            <Button variant={persona === 'ops' ? 'default' : 'outline'} onClick={() => setPersona('ops')}>OPS ACTOR</Button>
+            <Button variant={persona === 'player' ? 'default' : 'outline'} onClick={() => setPersona('player')}>PLAYER</Button>
+          </div>
+
+          <div className="mt-4 space-y-2">
+            <div className="text-[10px] font-semibold">CALLSIGN</div>
+            <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={callsign} onChange={(e) => setCallsign((e.target as any).value)} placeholder="CALLSIGN" />
+
+            {persona === 'director' && (
+              <>
+                <div className="text-[10px] font-semibold mt-2">PASSWORD</div>
+                <input type="password" className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={password} onChange={(e) => setPassword((e.target as any).value)} placeholder="PASSWORD" />
+                <div className="text-[10px] font-semibold mt-2">SCENARIO ID</div>
+                <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={scenarioId} onChange={(e) => setScenarioId((e.target as any).value)} placeholder="1" />
+              </>
+            )}
+
+            {persona === 'ops' && (
+              <>
+                <div className="text-[10px] font-semibold mt-2">JOIN CODE</div>
+                <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={joinCode} onChange={(e) => setJoinCode((e.target as any).value)} placeholder="JOIN CODE" />
+              </>
+            )}
+
+            {persona === 'player' && (
+              <Alert>
+                <AlertDescription className="text-[11px]">
+                  Player auth is scaffold-only right now. We’ll wire it to EyesOnly’s real player session once we confirm the endpoints.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between">
+            <div className="text-[10px] text-muted-foreground">This currently uses Spark KV internally; next step is swapping sync libs to EyesOnly /api.</div>
+            <Button onClick={doLogin} disabled={authBusy || !callsign.trim() || !baseUrl.trim()}>
+              {authBusy ? 'CONNECTING…' : 'CONNECT'}
+            </Button>
+          </div>
+        </Card>
+        <Toaster position="top-right" />
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="fixed top-2 right-2 z-50 flex items-center gap-2">
+        <Badge variant="outline" className="text-[10px]">{session.persona.toUpperCase()}</Badge>
+        <Badge variant="outline" className="text-[10px]">{session.baseUrl}</Badge>
+        <Button size="sm" variant="outline" onClick={doLogout}>LOGOUT</Button>
+      </div>
+      <AppInner />
     </>
   )
 }
