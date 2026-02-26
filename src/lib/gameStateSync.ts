@@ -519,6 +519,14 @@ class GameStateSync {
     await window.spark.kv.set(key, ping)
   }
 
+  async setOpsTelemetryVisible(visible: boolean): Promise<void> {
+    if (!this._usingEyesOnlyOps) return
+    await this._opsFetch('/api/ops/telemetry/visibility', {
+      method: 'POST',
+      body: JSON.stringify({ visible: !!visible }),
+    })
+  }
+
   async acknowledgePing(pingId: string): Promise<void> {
     if (this._usingEyesOnlyOps) {
       const idNum = parseInt(String(pingId), 10)

@@ -84,7 +84,15 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
   const [showRedTeam, setShowRedTeam] = useState(true)
   const [showBlueTeam, setShowBlueTeam] = useState(true)
 
+  const isOpsSession = typeof window !== 'undefined' && !!(window as any).__EYESONLY_OPS_TOKEN__ && !(window as any).__EYESONLY_M_TOKEN__
+  const [opsTelemetryVisible, setOpsTelemetryVisible] = useState(true)
+
   useEffect(() => {
+    if (isOpsSession) {
+      const v = window.localStorage.getItem('ey.ops.telemetryVisible')
+      if (v === '0') setOpsTelemetryVisible(false)
+    }
+
     const loadTelemetry = async () => {
       const allTelemetry = await gameStateSync.getAllTelemetry()
       const redTeamOnly = allTelemetry.filter(t => t.playerTeam === 'red')
@@ -357,6 +365,29 @@ export function GeographicMap({ assets, lanes = [], onAssetClick, onMapClick }: 
                 <Target weight="bold" size={10} className="mr-1 text-destructive" />
                 RED
               </Button>
+
+              {isOpsSession && (
+                <Button
+                  size="sm"
+                  variant={opsTelemetryVisible ? 'outline' : 'default'}
+                  onClick={async () => {
+                    const next = !opsTelemetryVisible
+                    setOpsTelemetryVisible(next)
+                    window.localStorage.setItem('ey.ops.telemetryVisible', next ? '1' : '0')
+                    try {
+                      await gameStateSync.setOpsTelemetryVisible(next)
+                      toast.success(next ? 'GPS visible to ops' : 'GPS hidden from ops')
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to toggle ops GPS visibility')
+                    }
+                  }}
+                  className="text-[9px] h-6 px-2"
+                  title="Toggle whether other ops viewers can see your GPS (M still can)."
+                >
+                  <Eye weight="bold" size={10} className="mr-1" />
+                  {opsTelemetryVisible ? 'VISIBLE' : 'STEALTH'}
+                </Button>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <Button
