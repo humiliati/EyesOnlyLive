@@ -2462,7 +2462,7 @@ function AppInner() {
   )
 }
 
-import { clearSession, directorLogin, loadSession, normalizeBaseUrl, opsJoin, saveSession, type EySession, type Persona } from '@/lib/eySession'
+import { clearSession, directorLogin, loadSession, normalizeBaseUrl, opsJoin, saveSession, userLogin, type EySession, type Persona } from '@/lib/eySession'
 
 function App() {
   const [session, setSession] = useState<EySession | null>(() => loadSession())
@@ -2472,6 +2472,7 @@ function App() {
     return (s as any)?.portalUrl || 'https://flapsandseals.com/m'
   })
   const [callsign, setCallsign] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [scenarioId, setScenarioId] = useState('1')
   const [joinCode, setJoinCode] = useState('')
@@ -2511,10 +2512,11 @@ function App() {
         setSession(s)
         toast.success('Director session established')
       } else if (persona === 'ops') {
-        const s = await opsJoin(portal, joinCode.trim(), callsign.trim())
+        const u = await userLogin(portal, username.trim())
+        const s = await opsJoin(portal, joinCode.trim(), u.userSessionToken, u.username)
         saveSession(s)
         setSession(s)
-        toast.success('Ops session established')
+        toast.success(`Ops session established (${s.callsign})`)
       } else {
         // Player mode: scaffold only (we'll wire to EyesOnly player auth once confirmed)
         const s: EySession = { persona: 'player', baseUrl: new URL(portal).origin, portalUrl: portal }
@@ -2549,8 +2551,12 @@ function App() {
           </div>
 
           <div className="mt-4 space-y-2">
-            <div className="text-[10px] font-semibold">CALLSIGN</div>
-            <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={callsign} onChange={(e) => setCallsign((e.target as any).value)} placeholder="CALLSIGN" />
+            {persona !== 'ops' && (
+              <>
+                <div className="text-[10px] font-semibold">CALLSIGN</div>
+                <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={callsign} onChange={(e) => setCallsign((e.target as any).value)} placeholder="CALLSIGN" />
+              </>
+            )}
 
             {persona === 'director' && (
               <>
@@ -2563,6 +2569,8 @@ function App() {
 
             {persona === 'ops' && (
               <>
+                <div className="text-[10px] font-semibold">USERNAME</div>
+                <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={username} onChange={(e) => setUsername((e.target as any).value)} placeholder="ACCOUNT USERNAME" />
                 <div className="text-[10px] font-semibold mt-2">JOIN CODE</div>
                 <input className="w-full bg-black/30 border border-border rounded px-2 py-1 text-[12px]" value={joinCode} onChange={(e) => setJoinCode((e.target as any).value)} placeholder="JOIN CODE" />
               </>
@@ -2579,7 +2587,16 @@ function App() {
 
           <div className="mt-4 flex items-center justify-between">
             <div className="text-[10px] text-muted-foreground">This currently uses Spark KV internally; next step is swapping sync libs to EyesOnly /api.</div>
-            <Button onClick={doLogin} disabled={authBusy || !callsign.trim() || !baseUrl.trim()}>
+            <Button
+              onClick={doLogin}
+              disabled={
+                authBusy ||
+                !baseUrl.trim() ||
+                (persona === 'director' ? (!callsign.trim() || !password.trim()) : false) ||
+                (persona === 'ops' ? (!username.trim() || !joinCode.trim()) : false) ||
+                (persona === 'player' ? false : false)
+              }
+            >
               {authBusy ? 'CONNECTING…' : 'CONNECT'}
             </Button>
           </div>

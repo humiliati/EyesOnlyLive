@@ -15,9 +15,13 @@ export interface OpsSession {
   persona: 'ops'
   baseUrl: string
   portalUrl?: string
+  /** Actor auth token (for /api/ops/*). */
   token: string
   callsign: string
   actor?: any
+  /** User session token (for account-level identity). */
+  userSessionToken: string
+  username: string
 }
 
 export interface PlayerSession {
@@ -94,19 +98,42 @@ export async function directorLogin(portalUrl: string, callsign: string, passwor
   return { persona: 'director', baseUrl, portalUrl, token, callsign, scenarioId }
 }
 
-export async function opsJoin(portalUrl: string, joinCode: string, callsign: string): Promise<OpsSession> {
+export async function userLogin(portalUrl: string, username: string): Promise<{ baseUrl: string; username: string; userSessionToken: string; callsign: string }> {
   const baseUrl = apiBaseFromPortalUrl(portalUrl)
-  const res = await fetch(`${baseUrl}/api/join`, {
+  const res = await fetch(`${baseUrl}/api/user/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: joinCode, callsign }),
+    body: JSON.stringify({ username }),
   })
   if (!res.ok) {
     const d = await res.json().catch(() => ({} as any))
-    throw new Error(d.message || `Ops join failed (${res.status})`)
+    throw new Error(d.message || `User login failed (${res.status})`)
   }
   const d = await res.json() as any
+  const userSessionToken = d.session_token
+  const callsign = d.user?.callsign
+  if (!userSessionToken) throw new Error('User login did not return session_token')
+  if (!callsign) throw new Error('User login did not return user.callsign')
+  return { baseUrl, username, userSessionToken, callsign }
+}
+
+export async function opsJoin(portalUrl: string, joinCode: string, userSessionToken: string, username: string): Promise<OpsSession> {
+  const baseUrl = apiBaseFromPortalUrl(portalUrl)
+  const res = await fetch(`${baseUrl}/api/join`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${userSessionToken}`,
+    },
+    body: JSON.stringify({ code: joinCode }),
+  })
+  const d = await res.json().catch(() => ({} as any)) as any
+  if (!res.ok) {
+    throw new Error(d.message || `Ops join failed (${res.status})`)
+  }
   const token = d.token
   if (!token) throw new Error('Ops join did not return a token')
-  return { persona: 'ops', baseUrl, portalUrl, token, callsign, actor: d.actor }
+  const callsign = d.actor?.callsign || d.actor?.callsign || ''
+  if (!callsign) throw new Error('Ops join did not return actor.callsign')
+  return { persona: 'ops', baseUrl, portalUrl, token, callsign, actor: d.actor, userSessionToken, username }
 }
